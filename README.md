@@ -11,7 +11,8 @@ SmartWAKE 2.5.7.
 ### État normal
 - **En-tête** : pastille ambre + nom + sous-titre de statut ("Sonne aujourd'hui · férié", "Préparation · 12 min avant sonnerie"...) + toggle d'activation
 - **Anneau de progression** autour de l'icône pendant la phase `prewake`, doublé d'une **barre de progression** avec pourcentage, minutes restantes et rappel des durées d'aube / pré-chauffage
-- **Heure** en 44 px avec compte à rebours ("dans 8 h 12 min", calculé depuis `sensor.<nom>_prochain_reveil`)
+- **Heure** en 44 px avec compte à rebours ("dans 8 h 12 min"), déduite de
+  `sensor.<nom>_prochain_reveil` afin de refléter l'heure réellement planifiée
 - **Jours** : 7 pastilles rondes L Ma Me J V S D, actives en ambre (tap → sélecteur de jours)
 - **Chips contextuelles** : Férié / Weekend / Vacances sco / En cours (vertes quand actives)
 - **Actions rapides** : Skip 1× · Test · Reset · compteur de snoozes (`utilisés/max`)
@@ -162,6 +163,26 @@ name: Réveil weekend
 | `snoozed`             | Pastille verte, sous-titre "Re-sonne dans X min"              |
 | `done`                | Carte normale                                                 |
 | `inactif`             | Carte grisée, sous-titre "Désactivé"                          |
+
+## Heure affichée et heure de référence
+
+L'intégration peut planifier un réveil à une heure différente de
+`time.<nom>_heure` dans trois cas :
+
+| Mécanisme | Option de l'intégration |
+| --- | --- |
+| Heures différentes selon le jour | `mode_heure: par_jour` + `heure_lundi`… |
+| Décalage selon le premier rendez-vous | `adaptatif_agenda` |
+| Décalage selon la phase de sommeil | `sommeil_phase` (Withings) |
+
+La carte affiche donc l'heure issue de `sensor.<nom>_prochain_reveil`, qui est
+la seule source fiable. Lorsqu'elle diffère de `time.<nom>_heure`, la mention
+**« ajustée depuis HH:MM »** apparaît sous le compte à rebours, et le panneau de
+réglages renomme le champ en *Heure de référence*.
+
+> Ces trois options ne sont exposées par aucune entité : elles se configurent
+> uniquement dans les options de l'intégration. La carte ne peut ni les lire ni
+> les modifier, elle en constate seulement l'effet.
 
 ## Calcul de la progression du pré-réveil
 

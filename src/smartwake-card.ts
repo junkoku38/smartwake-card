@@ -166,9 +166,34 @@ class SmartwakeCard extends LitElement {
     return this._st(this._config.entity)?.state === "on";
   }
 
-  private get _heure(): string {
+  /* Heure de référence configurée (time.heure) */
+  private get _heureConfig(): string {
     const t = this._e("time", "heure")?.state ?? "--:--";
     return t.substring(0, 5);
+  }
+
+  /* Heure réellement planifiée, déduite de sensor.prochain_reveil.
+   * Peut différer de time.heure dans trois cas gérés par l'intégration :
+   * mode_heure = par_jour, agenda adaptatif, phase de sommeil. */
+  private get _heureEffective(): string | null {
+    const ts = this._nextTs();
+    if (ts === null) return null;
+    const d = new Date(ts);
+    return (
+      String(d.getHours()).padStart(2, "0") +
+      ":" +
+      String(d.getMinutes()).padStart(2, "0")
+    );
+  }
+
+  /* L'heure affichée est celle qui sonnera réellement */
+  private get _heure(): string {
+    return this._heureEffective ?? this._heureConfig;
+  }
+
+  private get _heureAjustee(): boolean {
+    const eff = this._heureEffective;
+    return eff !== null && eff !== this._heureConfig;
   }
 
   private _activeDays(): string[] | null {
@@ -265,9 +290,9 @@ class SmartwakeCard extends LitElement {
     });
   }
 
-  /* Décale l'heure de N minutes (peut être négatif) */
+  /* Décale l'heure de référence de N minutes (peut être négatif) */
   private _shiftHeure(deltaMin: number): void {
-    const cur = this._heure;
+    const cur = this._heureConfig;
     const [h, m] = cur.split(":").map((n) => parseInt(n));
     if (isNaN(h) || isNaN(m)) return;
     let total = (h * 60 + m + deltaMin) % 1440;
@@ -362,7 +387,19 @@ class SmartwakeCard extends LitElement {
 
         <div class="time" @click=${() => this._moreInfo(this._e("time", "heure")?.entity_id)}>
           <span class="big">${this._heure}</span>
-          ${on && countdown ? html`<span class="cd">${countdown}</span>` : nothing}
+          <div class="time-meta">
+            ${on && countdown ? html`<span class="cd">${countdown}</span>` : nothing}
+            ${on && this._heureAjustee
+              ? html`<span
+                  class="adj"
+                  title="L'heure planifiée diffère de l'heure de référence (${this
+                    ._heureConfig}) : heures par jour, agenda adaptatif ou phase de sommeil."
+                >
+                  <ha-icon icon="mdi:calendar-sync"></ha-icon>ajustée depuis
+                  ${this._heureConfig}
+                </span>`
+              : nothing}
+          </div>
         </div>
 
         ${prewake ? this._renderPrewakeBar(prewake) : nothing}
@@ -533,18 +570,27 @@ class SmartwakeCard extends LitElement {
     return html`
       <div class="settings">
         <div class="row">
-          <span class="row-label">Heure</span>
+          <span class="row-label">
+            ${this._heureAjustee ? "Heure de référence" : "Heure"}
+          </span>
           <div class="stepper">
             <button @click=${() => this._shiftHeure(-5)}><ha-icon icon="mdi:minus"></ha-icon></button>
             <input
               class="time-input"
               type="time"
-              .value=${this._heure}
+              .value=${this._heureConfig}
               @change=${(e: Event) => this._setHeure((e.target as HTMLInputElement).value)}
             />
             <button @click=${() => this._shiftHeure(5)}><ha-icon icon="mdi:plus"></ha-icon></button>
           </div>
         </div>
+        ${this._heureAjustee
+          ? html`<div class="hint">
+              Le prochain réveil est planifié à ${this._heureEffective}. Les heures
+              par jour, l'agenda adaptatif et la phase de sommeil se configurent
+              dans les options de l'intégration.
+            </div>`
+          : nothing}
 
         ${sel
           ? html`<div class="row wrap">
@@ -802,6 +848,23 @@ class SmartwakeCard extends LitElement {
       font-size: 13px;
       color: var(--secondary-text-color);
     }
+    .time-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .adj {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--sw-amber-text);
+      cursor: help;
+    }
+    .adj ha-icon {
+      --mdc-icon-size: 13px;
+    }
     /* Barre de progression prewake */
     .prewake-block {
       display: flex;
@@ -1022,6 +1085,12 @@ class SmartwakeCard extends LitElement {
       background: var(--sw-amber-bg);
       color: var(--sw-amber-text);
       font-weight: 600;
+    }
+    .hint {
+      font-size: 11px;
+      line-height: 1.35;
+      color: var(--secondary-text-color);
+      padding: 2px 0 6px;
     }
     /* Statistiques */
     .stats {
