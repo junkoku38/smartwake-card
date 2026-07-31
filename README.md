@@ -16,6 +16,27 @@ Carte Lovelace custom pour l'intégration [SmartWAKE](https://github.com/junkoku
 - **Footer réglages** : volume final · luminosité max · pré-chauffage · aube · café (tap → réglage)
 - **Statistiques** : réveils / snoozes / stops cumulés + date du dernier réveil
 
+### Panneau de réglages
+
+Le chevron en bas à droite déplie un panneau qui permet de **modifier les
+paramètres directement depuis la carte**, sans passer par les fiches
+*more-info* :
+
+| Réglage | Contrôle |
+|---|---|
+| Heure | champ `time` + boutons −5 / +5 min |
+| Jours | 4 boutons : Tous / Lundi-vendredi / Samedi-dimanche / Personnalisé |
+| Durée snooze, Snooze max | steppers −/+ |
+| Aube, Pré-chauffage, Durée éclairage, Escalade, Café avant | steppers −/+ |
+| Luminosité max, Volume initial, Volume final | steppers −/+ affichés en % |
+
+Les steppers respectent le `step`, le `min` et le `max` déclarés par chaque
+entité `number` et se désactivent aux bornes.
+
+> **Requiert SmartWAKE ≥ 2.4.1.** Les versions antérieures ont un bug qui rend
+> les 10 entités `number` non modifiables (`AttributeError` sur `self.entry`
+> dans `number.py`). Voir le correctif dans le dépôt de l'intégration.
+
 Le rafraîchissement passe automatiquement de 30 s à 5 s pendant le `prewake`
 pour une progression fluide.
 
@@ -62,7 +83,7 @@ name: Réveil semaine
 | `name`          | string | SmartWAKE | Nom affiché dans l'en-tête                         |
 | `show_stats`    | bool   | true      | Afficher le compteur de snoozes                    |
 | `show_context`  | bool   | true      | Afficher les chips Férié / Weekend / Vacances sco  |
-| `show_settings` | bool   | true      | Afficher le footer réglages (volume, chauffe, aube)|
+| `show_settings` | bool   | true      | Afficher le footer réglages et le panneau d'édition|
 
 Toutes les autres entités sont **résolues automatiquement** à partir du préfixe
 du switch — aucune configuration supplémentaire.
@@ -99,6 +120,10 @@ number.reveil_cafe_avant_min            # footer
 
 Chaque élément est cliquable et ouvre la fiche *more-info* de l'entité
 correspondante. Les entités absentes sont simplement masquées.
+
+Les entités **écrites** par la carte via le panneau de réglages :
+`time.set_value` sur l'heure, `select.select_option` sur les jours,
+`number.set_value` sur les 10 paramètres numériques.
 
 > Le mode `personnalise` du sélecteur de jours ne peut pas être détaillé :
 > l'intégration n'expose pas la liste `jours_perso`. La carte affiche alors le

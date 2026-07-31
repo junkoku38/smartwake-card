@@ -95,6 +95,7 @@ class SmartwakeCard extends i {
     constructor() {
         super(...arguments);
         this._now = Date.now();
+        this._open = false;
         this._tickMs = 0;
     }
     static getStubConfig() {
@@ -252,6 +253,60 @@ class SmartwakeCard extends i {
         this.hass.callService("switch", this._isOn ? "turn_off" : "turn_on", {
             entity_id: this._config.entity,
         });
+    }
+    /* ---------- Écritures ---------- */
+    _setHeure(value) {
+        const ent = this._e("time", "heure");
+        if (!ent || !/^\d{2}:\d{2}/.test(value))
+            return;
+        this.hass.callService("time", "set_value", {
+            entity_id: ent.entity_id,
+            time: value.length === 5 ? `${value}:00` : value,
+        });
+    }
+    /* Décale l'heure de N minutes (peut être négatif) */
+    _shiftHeure(deltaMin) {
+        const cur = this._heure;
+        const [h, m] = cur.split(":").map((n) => parseInt(n));
+        if (isNaN(h) || isNaN(m))
+            return;
+        let total = (h * 60 + m + deltaMin) % 1440;
+        if (total < 0)
+            total += 1440;
+        const nh = String(Math.floor(total / 60)).padStart(2, "0");
+        const nm = String(total % 60).padStart(2, "0");
+        this._setHeure(`${nh}:${nm}`);
+    }
+    _setJours(mode) {
+        const ent = this._e("select", "jours");
+        if (!ent)
+            return;
+        this.hass.callService("select", "select_option", {
+            entity_id: ent.entity_id,
+            option: mode,
+        });
+    }
+    _setNumber(suffix, value) {
+        const ent = this._e("number", suffix);
+        if (!ent)
+            return;
+        const min = parseFloat(ent.attributes.min ?? "0");
+        const max = parseFloat(ent.attributes.max ?? "100");
+        const clamped = Math.min(max, Math.max(min, value));
+        this.hass.callService("number", "set_value", {
+            entity_id: ent.entity_id,
+            value: clamped,
+        });
+    }
+    _stepNumber(suffix, dir) {
+        const ent = this._e("number", suffix);
+        const cur = this._num(suffix);
+        if (!ent || cur === null)
+            return;
+        const step = parseFloat(ent.attributes.step ?? "1") || 1;
+        const next = cur + dir * step;
+        /* Évite les artefacts de flottants sur les steps à 0.01 */
+        this._setNumber(suffix, Math.round(next * 100) / 100);
     }
     _moreInfo(entityId) {
         if (!entityId)
@@ -421,7 +476,89 @@ class SmartwakeCard extends i {
           ${spec("aube_min", "mdi:weather-sunset-up", (v) => `${v} min`)}
           ${spec("cafe_avant_min", "mdi:coffee", (v) => `${v} min`)}
         </div>
-        <ha-icon class="chev" icon="mdi:chevron-right" @click=${() => this._moreInfo(this._config.entity)}></ha-icon>
+        <ha-icon
+          class="chev ${this._open ? "open" : ""}"
+          icon="mdi:chevron-down"
+          title="Régler"
+          @click=${() => (this._open = !this._open)}
+        ></ha-icon>
+      </div>
+      ${this._open ? this._renderSettings() : A}
+    `;
+    }
+    /* Panneau de réglages éditable */
+    _renderSettings() {
+        const sel = this._e("select", "jours");
+        const mode = sel?.state.toLowerCase() ?? "";
+        const stepper = (suffix, label, fmt) => {
+            const v = this._num(suffix);
+            if (v === null)
+                return A;
+            const ent = this._e("number", suffix);
+            const min = parseFloat(ent.attributes.min ?? "0");
+            const max = parseFloat(ent.attributes.max ?? "100");
+            return b `
+        <div class="row">
+          <span class="row-label" @click=${() => this._moreInfo(ent.entity_id)}>${label}</span>
+          <div class="stepper">
+            <button ?disabled=${v <= min} @click=${() => this._stepNumber(suffix, -1)}>
+              <ha-icon icon="mdi:minus"></ha-icon>
+            </button>
+            <span class="row-val">${fmt(v)}</span>
+            <button ?disabled=${v >= max} @click=${() => this._stepNumber(suffix, 1)}>
+              <ha-icon icon="mdi:plus"></ha-icon>
+            </button>
+          </div>
+        </div>
+      `;
+        };
+        return b `
+      <div class="settings">
+        <div class="row">
+          <span class="row-label">Heure</span>
+          <div class="stepper">
+            <button @click=${() => this._shiftHeure(-5)}><ha-icon icon="mdi:minus"></ha-icon></button>
+            <input
+              class="time-input"
+              type="time"
+              .value=${this._heure}
+              @change=${(e) => this._setHeure(e.target.value)}
+            />
+            <button @click=${() => this._shiftHeure(5)}><ha-icon icon="mdi:plus"></ha-icon></button>
+          </div>
+        </div>
+
+        ${sel
+            ? b `<div class="row wrap">
+              <span class="row-label">Jours</span>
+              <div class="modes">
+                ${["tous", "semaine", "weekend", "personnalise"].map((m) => b `<button
+                    class="mode-btn ${mode === m ? "sel" : ""}"
+                    @click=${() => this._setJours(m)}
+                  >
+                    ${MODE_LABEL[m]}
+                  </button>`)}
+              </div>
+            </div>`
+            : A}
+
+        ${stepper("snooze_min", "Durée snooze", (v) => `${v} min`)}
+        ${stepper("max_snooze", "Snooze max", (v) => `${v}`)}
+        ${stepper("aube_min", "Aube", (v) => `${v} min`)}
+        ${stepper("pre_chauffage_min", "Pré-chauffage", (v) => `${v} min`)}
+        ${stepper("duree_eclairage_min", "Durée éclairage", (v) => `${v} min`)}
+        ${stepper("luminosite_max", "Luminosité max", (v) => `${Math.round((v / 255) * 100)} %`)}
+        ${stepper("escalade_min", "Escalade", (v) => `${v} min`)}
+        ${stepper("volume_initial", "Volume initial", (v) => `${Math.round(v * 100)} %`)}
+        ${stepper("volume_final", "Volume final", (v) => `${Math.round(v * 100)} %`)}
+        ${stepper("cafe_avant_min", "Café avant", (v) => `${v} min`)}
+
+        <div class="row">
+          <span class="row-label">Fiche complète</span>
+          <button class="mode-btn" @click=${() => this._moreInfo(this._config.entity)}>
+            Ouvrir
+          </button>
+        </div>
       </div>
     `;
     }
@@ -755,8 +892,113 @@ SmartwakeCard.styles = i$3 `
     }
     .chev {
       cursor: pointer;
-      --mdc-icon-size: 16px;
+      --mdc-icon-size: 18px;
       flex: none;
+      transition: transform 0.2s ease;
+    }
+    .chev.open {
+      transform: rotate(180deg);
+      color: var(--sw-amber);
+    }
+    /* Panneau de réglages */
+    .settings {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 4px 0 2px;
+      animation: sw-slide 0.18s ease;
+    }
+    @keyframes sw-slide {
+      from {
+        opacity: 0;
+        transform: translateY(-4px);
+      }
+      to {
+        opacity: 1;
+        transform: none;
+      }
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 34px;
+    }
+    .row.wrap {
+      flex-wrap: wrap;
+    }
+    .row-label {
+      font-size: 12px;
+      color: var(--secondary-text-color);
+      cursor: pointer;
+    }
+    .stepper {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .stepper button,
+    .mode-btn {
+      border: none;
+      background: var(--secondary-background-color);
+      color: var(--primary-text-color);
+      font-family: inherit;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+    .stepper button {
+      width: 28px;
+      height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stepper button ha-icon {
+      --mdc-icon-size: 16px;
+    }
+    .stepper button:active {
+      background: var(--sw-amber-bg);
+    }
+    .stepper button[disabled] {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .row-val {
+      min-width: 58px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      color: var(--primary-text-color);
+    }
+    .time-input {
+      border: none;
+      background: var(--secondary-background-color);
+      color: var(--primary-text-color);
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+      border-radius: 8px;
+      padding: 4px 6px;
+      text-align: center;
+      width: 84px;
+    }
+    .modes {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .mode-btn {
+      font-size: 11px;
+      padding: 6px 9px;
+      color: var(--secondary-text-color);
+    }
+    .mode-btn.sel {
+      background: var(--sw-amber-bg);
+      color: var(--sw-amber-text);
+      font-weight: 600;
     }
     /* Statistiques */
     .stats {
@@ -866,6 +1108,9 @@ __decorate([
 __decorate([
     r()
 ], SmartwakeCard.prototype, "_now", void 0);
+__decorate([
+    r()
+], SmartwakeCard.prototype, "_open", void 0);
 customElements.define("smartwake-card", SmartwakeCard);
 window.customCards = window.customCards || [];
 window.customCards.push({
