@@ -1,6 +1,5 @@
 {
   "name": "SmartWAKE Card",
   "render_readme": true,
-  "filename": "smartwake-card.js",
-  "content_in_root": true
+  "filename": "dist/smartwake-card.js"
 }
