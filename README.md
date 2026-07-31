@@ -2,22 +2,29 @@
 
 Carte Lovelace custom pour l'intégration [SmartWAKE](https://github.com/junkoku38/smartwake).
 
-**v2** — nouveau design : grande heure avec compte à rebours, pastilles de jours, chips contextuelles, et état sonnerie plein cadre avec Snooze / Stop.
+**v3** — alignée sur l'intégration SmartWAKE 2.4.0, avec anneau de progression du pré-réveil.
 
 ## Design
 
 ### État normal
-- **En-tête** : pastille ambre + nom + sous-titre de statut ("Sonne aujourd'hui · férié", "Mode vacances", "La maison se prépare"...) + toggle d'activation
-- **Heure** en 44 px avec compte à rebours ("dans 8 h 12 min", calculé depuis `sensor.<nom>_prochain_reveil`, rafraîchi toutes les 30 s)
+- **En-tête** : pastille ambre + nom + sous-titre de statut ("Sonne aujourd'hui · férié", "Préparation · 12 min avant sonnerie"...) + toggle d'activation
+- **Anneau de progression** autour de l'icône pendant la phase `prewake`, doublé d'une **barre de progression** avec pourcentage, minutes restantes et rappel des durées d'aube / pré-chauffage
+- **Heure** en 44 px avec compte à rebours ("dans 8 h 12 min", calculé depuis `sensor.<nom>_prochain_reveil`)
 - **Jours** : 7 pastilles rondes L Ma Me J V S D, actives en ambre (tap → sélecteur de jours)
-- **Chips contextuelles** : Férié / Weekend / Vacances sco (vertes quand actives)
-- **Actions rapides** : Skip 1× · Test · compteur de snoozes
-- **Footer réglages** : volume final · pré-chauffage · aube (tap → réglage)
+- **Chips contextuelles** : Férié / Weekend / Vacances sco / En cours (vertes quand actives)
+- **Actions rapides** : Skip 1× · Test · Reset · compteur de snoozes (`utilisés/max`)
+- **Footer réglages** : volume final · luminosité max · pré-chauffage · aube · café (tap → réglage)
+- **Statistiques** : réveils / snoozes / stops cumulés + date du dernier réveil
+
+Le rafraîchissement passe automatiquement de 30 s à 5 s pendant le `prewake`
+pour une progression fluide.
 
 ### État sonnerie (`statut = ringing`)
 La carte se transforme : bordure ambre pulsée, deux gros boutons tactiles
-**Snooze** (`smartwake.snooze`) et **Stop** (`smartwake.stop`), et le rappel
-de l'escalade à venir. Pensée pour un doigt endormi à 6 h 45.
+**Snooze** (`smartwake.snooze`) et **Stop** (`smartwake.stop`), le nombre de
+snoozes restants, et le rappel de l'escalade à venir. Le bouton Snooze se
+désactive automatiquement quand `max_snooze` est atteint. Pensée pour un doigt
+endormi à 6 h 45.
 
 La carte suit le thème Home Assistant (clair / sombre) ; seul l'accent ambre
 `#EF9F27` est fixe.
@@ -57,10 +64,45 @@ name: Réveil semaine
 | `show_context`  | bool   | true      | Afficher les chips Férié / Weekend / Vacances sco  |
 | `show_settings` | bool   | true      | Afficher le footer réglages (volume, chauffe, aube)|
 
-Toutes les autres entités (`time.<nom>_heure`, `select.<nom>_jours`,
-`sensor.<nom>_statut`, `sensor.<nom>_prochain_reveil`, `number.*`,
-`binary_sensor.*`, `button.*`) sont **résolues automatiquement** à partir du
-préfixe du switch — aucune configuration supplémentaire.
+Toutes les autres entités sont **résolues automatiquement** à partir du préfixe
+du switch — aucune configuration supplémentaire.
+
+### Entités lues
+
+Pour un réveil nommé `reveil` :
+
+```yaml
+switch.reveil_actif                     # toggle d'activation
+time.reveil_heure                       # heure affichée
+select.reveil_jours                     # tous | semaine | weekend | personnalise
+sensor.reveil_statut                    # idle|prewake|ringing|snoozed|done|inactif
+sensor.reveil_prochain_reveil           # compte à rebours + progression prewake
+sensor.reveil_snooze_utilises           # compteur de snoozes
+sensor.reveil_declenchements_total      # statistiques
+sensor.reveil_snoozes_total
+sensor.reveil_stops_total
+sensor.reveil_dernier_reveil
+binary_sensor.reveil_sonne_aujourd_hui  # sous-titre
+binary_sensor.reveil_reveil_en_cours    # chip « En cours »
+binary_sensor.reveil_jour_ferie
+binary_sensor.reveil_weekend
+binary_sensor.reveil_vacances_scolaires
+number.reveil_snooze_min                # libellé du bouton Snooze
+number.reveil_max_snooze                # snoozes restants
+number.reveil_aube_min                  # progression prewake + footer
+number.reveil_pre_chauffage_min         # progression prewake + footer
+number.reveil_escalade_min              # rappel d'escalade
+number.reveil_volume_final              # footer
+number.reveil_luminosite_max            # footer
+number.reveil_cafe_avant_min            # footer
+```
+
+Chaque élément est cliquable et ouvre la fiche *more-info* de l'entité
+correspondante. Les entités absentes sont simplement masquées.
+
+> Le mode `personnalise` du sélecteur de jours ne peut pas être détaillé :
+> l'intégration n'expose pas la liste `jours_perso`. La carte affiche alors le
+> libellé « Personnalisé » à côté des pastilles.
 
 ### Multi-alarmes
 
@@ -78,25 +120,38 @@ name: Réveil weekend
 
 ## Correspondance des statuts
 
-| `sensor.<nom>_statut` | Rendu                                              |
-| --------------------- | -------------------------------------------------- |
-| `idle`                | Carte normale                                      |
-| `prewake`             | Carte normale, sous-titre "La maison se prépare"   |
-| `ringing`             | Carte sonnerie (bordure pulsée, Snooze / Stop)     |
-| `snoozed`             | Carte normale, sous-titre "Re-sonne dans X min"    |
-| `done`                | Carte normale                                      |
+| `sensor.<nom>_statut` | Rendu                                                         |
+| --------------------- | ------------------------------------------------------------- |
+| `idle`                | Carte normale                                                 |
+| `prewake`             | Anneau + barre de progression, liseré ambre à gauche           |
+| `ringing`             | Carte sonnerie (bordure pulsée, Snooze / Stop)                 |
+| `snoozed`             | Pastille verte, sous-titre "Re-sonne dans X min"              |
+| `done`                | Carte normale                                                 |
+| `inactif`             | Carte grisée, sous-titre "Désactivé"                          |
+
+## Calcul de la progression du pré-réveil
+
+L'intégration démarre la phase `prewake` à `H − max(pre_chauffage_min, aube_min)`.
+La carte reproduit ce calcul :
+
+```
+total   = max(number.<nom>_aube_min, number.<nom>_pre_chauffage_min)
+début   = sensor.<nom>_prochain_reveil − total
+progrès = (maintenant − début) / (prochain_reveil − début)
+```
+
+Si les deux durées valent 0, ni l'anneau ni la barre ne sont affichés.
 
 ## Développement
 
 ```bash
 npm install
-npm run build   # bundle src/smartwake-card.ts → dist/smartwake-card.js
+npm run build          # bundle → dist/smartwake-card.js
+npm run build:release  # build + copie du bundle à la racine (requis par HACS)
 ```
 
-Le `select.<nom>_jours` est interprété ainsi : si l'attribut `jours_actifs`
-(ou `days`) expose une liste, elle pilote les pastilles ; sinon les modes
-`tous` / `semaine` / `weekend` sont mappés ; tout autre mode affiche son
-libellé à côté des pastilles.
+Le bundle doit être versionné à la racine (`smartwake-card.js`) car `hacs.json`
+utilise `content_in_root: true`.
 
 ## Licence
 

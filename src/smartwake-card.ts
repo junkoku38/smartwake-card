@@ -1,9 +1,10 @@
-import { LitElement, html, css, nothing, TemplateResult } from "lit";
+import { LitElement, html, css, nothing, TemplateResult, svg } from "lit";
 import { property, state } from "lit/decorators.js";
 
-/* SmartWAKE Card v2 — design "carte réveil"
- * En-tête statut + toggle, grande heure + compte à rebours,
- * pastilles de jours, chips contextuelles, footer réglages,
+/* SmartWAKE Card v3 — aligné sur l'intégration smartwake 2.4.0
+ * Anneau de progression pendant la phase prewake (aube / pré-chauffage),
+ * en-tête statut + toggle, grande heure + compte à rebours,
+ * pastilles de jours, chips contextuelles, footer réglages, stats,
  * état sonnerie plein cadre avec Snooze / Stop.
  */
 
@@ -42,19 +43,32 @@ const DAYS: Array<[string, string]> = [
   ["dimanche", "D"],
 ];
 
+/* Options réelles du select : tous | semaine | weekend | personnalise */
 const MODE_DAYS: Record<string, string[]> = {
   tous: DAYS.map(([d]) => d),
   semaine: ["lundi", "mardi", "mercredi", "jeudi", "vendredi"],
   weekend: ["samedi", "dimanche"],
 };
 
+const MODE_LABEL: Record<string, string> = {
+  tous: "Tous les jours",
+  semaine: "Lundi au vendredi",
+  weekend: "Samedi et dimanche",
+  personnalise: "Personnalisé",
+};
+
+/* Valeurs réelles du sensor de statut (device_class enum) */
 const STATUS_LABEL: Record<string, string> = {
   idle: "En attente",
-  prewake: "Préparation en cours",
+  prewake: "La maison se prépare",
   ringing: "Ça sonne",
   snoozed: "Snooze",
   done: "Terminé",
+  inactif: "Désactivé",
 };
+
+const RING_R = 19;
+const RING_C = 2 * Math.PI * RING_R;
 
 class SmartwakeCard extends LitElement {
   @property({ attribute: false }) hass!: HomeAssistant;
@@ -62,6 +76,7 @@ class SmartwakeCard extends LitElement {
   @state() private _now: number = Date.now();
 
   private _tick?: number;
+  private _tickMs = 0;
 
   static getStubConfig(): Partial<SmartwakeCardConfig> {
     return { entity: "switch.reveil_actif", name: "Réveil" };
@@ -82,25 +97,38 @@ class SmartwakeCard extends LitElement {
   }
 
   getCardSize(): number {
-    return 4;
+    return 5;
   }
 
   connectedCallback(): void {
     super.connectedCallback();
-    this._tick = window.setInterval(() => (this._now = Date.now()), 30_000);
+    this._startTick(30_000);
   }
 
   disconnectedCallback(): void {
     if (this._tick) window.clearInterval(this._tick);
+    this._tick = undefined;
+    this._tickMs = 0;
     super.disconnectedCallback();
+  }
+
+  private _startTick(ms: number): void {
+    if (this._tick) window.clearInterval(this._tick);
+    this._tickMs = ms;
+    this._tick = window.setInterval(() => (this._now = Date.now()), ms);
+  }
+
+  /* Rafraîchissement accéléré pendant le prewake pour une progression fluide */
+  protected updated(): void {
+    if (!this._config || !this.hass || !this._tick) return;
+    const wanted = this._statut === "prewake" ? 5_000 : 30_000;
+    if (wanted !== this._tickMs) this._startTick(wanted);
   }
 
   /* ---------- Résolution des entités ---------- */
 
   private get _base(): string {
-    return this._config.entity
-      .replace(/^switch\./, "")
-      .replace(/_actif$/, "");
+    return this._config.entity.replace(/^switch\./, "").replace(/_actif$/, "");
   }
 
   private _st(entityId: string): HassEntity | undefined {
@@ -111,10 +139,21 @@ class SmartwakeCard extends LitElement {
     return this._st(`${domain}.${this._base}_${suffix}`);
   }
 
+  private _num(suffix: string): number | null {
+    const e = this._e("number", suffix);
+    if (!e) return null;
+    const v = parseFloat(e.state);
+    return isNaN(v) ? null : v;
+  }
+
+  private _isOnBs(suffix: string): boolean {
+    return this._e("binary_sensor", suffix)?.state === "on";
+  }
+
   /* ---------- Données dérivées ---------- */
 
   private get _statut(): string {
-    return this._e("sensor", "statut")?.state ?? "idle";
+    return this._e("sensor", "statut")?.state ?? "inactif";
   }
 
   private get _isOn(): boolean {
@@ -129,83 +168,95 @@ class SmartwakeCard extends LitElement {
   private _activeDays(): string[] | null {
     const sel = this._e("select", "jours");
     if (!sel) return null;
-    const attr = sel.attributes.jours_actifs ?? sel.attributes.days;
-    if (Array.isArray(attr)) return attr.map((d) => String(d).toLowerCase());
-    const mode = sel.state.toLowerCase();
-    return MODE_DAYS[mode] ?? null;
+    return MODE_DAYS[sel.state.toLowerCase()] ?? null;
+  }
+
+  private _nextTs(): number | null {
+    const next = this._e("sensor", "prochain_reveil")?.state;
+    if (!next || next === "unknown" || next === "unavailable") return null;
+    const t = new Date(next).getTime();
+    return isNaN(t) ? null : t;
   }
 
   private _countdown(): string | null {
-    const next = this._e("sensor", "prochain_reveil")?.state;
-    if (!next || next === "unknown" || next === "unavailable") return null;
-    const target = new Date(next).getTime();
-    if (isNaN(target)) return null;
+    const target = this._nextTs();
+    if (target === null) return null;
     const d = Math.max(0, Math.round((target - this._now) / 1000));
     const h = Math.floor(d / 3600);
     const m = Math.floor((d % 3600) / 60);
     if (h >= 48) return `dans ${Math.round(h / 24)} jours`;
-    return h > 0 ? `dans ${h} h ${String(m).padStart(2, "0")} min` : `dans ${m} min`;
+    return h > 0
+      ? `dans ${h} h ${String(m).padStart(2, "0")} min`
+      : `dans ${m} min`;
+  }
+
+  /* Le prewake démarre à H − max(pré-chauffage, aube) — cf. coordinator */
+  private _prewake(): { pct: number; reste: number; total: number } | null {
+    if (this._statut !== "prewake") return null;
+    const target = this._nextTs();
+    if (target === null) return null;
+    const total = Math.max(this._num("aube_min") ?? 0, this._num("pre_chauffage_min") ?? 0);
+    if (total <= 0) return null;
+    const start = target - total * 60_000;
+    const span = target - start;
+    const pct = Math.min(1, Math.max(0, (this._now - start) / span));
+    const reste = Math.max(0, Math.ceil((target - this._now) / 60_000));
+    return { pct, reste, total };
+  }
+
+  private _snoozeInfo(): { used: number; max: number | null } {
+    const used = parseInt(this._e("sensor", "snooze_utilises")?.state ?? "0");
+    return { used: isNaN(used) ? 0 : used, max: this._num("max_snooze") };
   }
 
   private _subtitle(): string {
     const s = this._statut;
+
     if (s === "ringing") {
-      const n = this._e("sensor", "snooze_count")?.state ?? "0";
-      return n !== "0" ? `Snooze utilisés : ${n}` : "Debout !";
+      const { used, max } = this._snoozeInfo();
+      if (used > 0) return `Snooze ${used}${max !== null ? `/${max}` : ""} utilisé${used > 1 ? "s" : ""}`;
+      return "Debout !";
     }
     if (s === "snoozed") {
-      const min = this._e("number", "snooze_min")?.state;
-      return min ? `Re-sonne dans ${parseInt(min)} min` : "Snooze en cours";
+      const min = this._num("snooze_min");
+      return min !== null ? `Re-sonne dans ${min} min` : "Snooze en cours";
     }
-    if (s === "prewake") return "La maison se prépare";
-    if (!this._isOn) return "Désactivé";
+    if (s === "prewake") {
+      const p = this._prewake();
+      return p ? `Préparation · ${p.reste} min avant sonnerie` : STATUS_LABEL.prewake;
+    }
+    if (!this._isOn || s === "inactif") return "Désactivé";
+
     const parts: string[] = [];
-    if (this._e("binary_sensor", "sonne_aujourd_hui")?.state === "on") {
-      parts.push("Sonne aujourd'hui");
-    } else {
-      parts.push("Inactif aujourd'hui");
-    }
-    if (this._e("binary_sensor", "jour_ferie")?.state === "on") parts.push("férié");
-    if (this._e("binary_sensor", "vacances_scolaires")?.state === "on")
-      parts.push("vacances sco");
+    parts.push(this._isOnBs("sonne_aujourd_hui") ? "Sonne aujourd'hui" : "Inactif aujourd'hui");
+    if (this._isOnBs("jour_ferie")) parts.push("férié");
+    if (this._isOnBs("vacances_scolaires")) parts.push("vacances sco");
     return parts.join(" · ");
   }
 
   /* ---------- Actions ---------- */
 
   private _svc(service: string): void {
-    this.hass.callService(
-      "smartwake",
-      service,
-      {},
-      { entity_id: this._config.entity }
-    );
+    this.hass.callService("smartwake", service, {
+      entity_id: [this._config.entity],
+    });
   }
 
   private _toggle(): void {
-    this.hass.callService(
-      "switch",
-      this._isOn ? "turn_off" : "turn_on",
-      {},
-      { entity_id: this._config.entity }
-    );
-  }
-
-  private _pressButton(suffix: string): void {
-    const btn = this._e("button", suffix);
-    if (btn) {
-      this.hass.callService("button", "press", {}, { entity_id: btn.entity_id });
-    }
+    this.hass.callService("switch", this._isOn ? "turn_off" : "turn_on", {
+      entity_id: this._config.entity,
+    });
   }
 
   private _moreInfo(entityId?: string): void {
     if (!entityId) return;
-    const ev = new CustomEvent("hass-more-info", {
-      bubbles: true,
-      composed: true,
-      detail: { entityId },
-    });
-    this.dispatchEvent(ev);
+    this.dispatchEvent(
+      new CustomEvent("hass-more-info", {
+        bubbles: true,
+        composed: true,
+        detail: { entityId },
+      })
+    );
   }
 
   /* ---------- Rendu ---------- */
@@ -214,22 +265,32 @@ class SmartwakeCard extends LitElement {
     if (!this._config || !this.hass) return html``;
     if (!this._st(this._config.entity)) {
       return html`<ha-card class="card">
-        <div class="err">Entité introuvable : ${this._config.entity}</div>
+        <div class="err">
+          <ha-icon icon="mdi:alert-circle-outline"></ha-icon>
+          Entité introuvable : ${this._config.entity}
+        </div>
       </ha-card>`;
     }
-    const ringing = this._statut === "ringing";
-    return ringing ? this._renderRinging() : this._renderNormal();
+    return this._statut === "ringing" ? this._renderRinging() : this._renderNormal();
   }
 
   private _renderNormal(): TemplateResult {
     const on = this._isOn;
+    const statut = this._statut;
+    const prewake = this._prewake();
     const countdown = this._countdown();
+
     return html`
-      <ha-card class="card ${on ? "" : "dim"}">
+      <ha-card class="card ${on ? "" : "dim"} ${statut === "prewake" ? "prewake" : ""}">
         <div class="header">
           <div class="id">
-            <div class="badge ${on ? "amber" : "off"}">
-              <ha-icon icon="mdi:alarm"></ha-icon>
+            <div class="badge-wrap">
+              <div class="badge ${on ? (statut === "snoozed" ? "snooze" : "amber") : "off"}">
+                <ha-icon
+                  icon=${statut === "snoozed" ? "mdi:alarm-snooze" : on ? "mdi:alarm" : "mdi:alarm-off"}
+                ></ha-icon>
+              </div>
+              ${prewake ? this._renderRing(prewake.pct) : nothing}
             </div>
             <div class="titles">
               <div class="name">${this._config.name ?? "SmartWAKE"}</div>
@@ -239,138 +300,186 @@ class SmartwakeCard extends LitElement {
           <ha-switch .checked=${on} @change=${this._toggle}></ha-switch>
         </div>
 
-        <div
-          class="time"
-          @click=${() => this._moreInfo(this._e("time", "heure")?.entity_id)}
-        >
+        <div class="time" @click=${() => this._moreInfo(this._e("time", "heure")?.entity_id)}>
           <span class="big">${this._heure}</span>
           ${on && countdown ? html`<span class="cd">${countdown}</span>` : nothing}
         </div>
 
+        ${prewake ? this._renderPrewakeBar(prewake) : nothing}
         ${this._renderDays()}
         ${this._config.show_context ? this._renderChips() : nothing}
         ${this._renderQuickActions()}
         ${this._config.show_settings ? this._renderFooter() : nothing}
+        ${this._config.show_stats ? this._renderStats() : nothing}
       </ha-card>
     `;
   }
 
+  private _renderRing(pct: number): TemplateResult {
+    return html`
+      <svg class="ring" viewBox="0 0 44 44" aria-hidden="true">
+        ${svg`
+          <circle class="ring-bg" cx="22" cy="22" r=${RING_R}></circle>
+          <circle
+            class="ring-fg"
+            cx="22" cy="22" r=${RING_R}
+            stroke-dasharray=${RING_C}
+            stroke-dashoffset=${RING_C * (1 - pct)}
+          ></circle>
+        `}
+      </svg>
+    `;
+  }
+
+  private _renderPrewakeBar(p: { pct: number; reste: number; total: number }): TemplateResult {
+    const aube = this._num("aube_min");
+    const chauffe = this._num("pre_chauffage_min");
+    const legend: string[] = [];
+    if (aube) legend.push(`aube ${aube} min`);
+    if (chauffe) legend.push(`chauffe ${chauffe} min`);
+    return html`
+      <div class="prewake-block">
+        <div class="bar"><div class="bar-fill" style="width:${(p.pct * 100).toFixed(1)}%"></div></div>
+        <div class="bar-legend">
+          <span>${Math.round(p.pct * 100)} % · ${p.reste} min restantes</span>
+          ${legend.length ? html`<span>${legend.join(" · ")}</span>` : nothing}
+        </div>
+      </div>
+    `;
+  }
+
   private _renderDays(): TemplateResult {
-    const active = this._activeDays();
     const sel = this._e("select", "jours");
+    const active = this._activeDays();
+    const mode = sel?.state.toLowerCase() ?? "";
     return html`
       <div class="days" @click=${() => this._moreInfo(sel?.entity_id)}>
-        ${DAYS.map(([day, label]) => {
-          const isOn = active ? active.includes(day) : false;
-          return html`<div class="day ${isOn ? "on" : ""}">${label}</div>`;
-        })}
+        ${DAYS.map(
+          ([day, label]) => html`<div class="day ${active?.includes(day) ? "on" : ""}">${label}</div>`
+        )}
         ${!active && sel
-          ? html`<span class="mode">${sel.state}</span>`
+          ? html`<span class="mode">${MODE_LABEL[mode] ?? sel.state}</span>`
           : nothing}
       </div>
     `;
   }
 
-  private _renderChips(): TemplateResult {
-    const chip = (
-      suffix: string,
-      icon: string,
-      label: string
-    ): TemplateResult | typeof nothing => {
+  private _renderChips(): TemplateResult | typeof nothing {
+    const chip = (suffix: string, icon: string, label: string) => {
       const ent = this._e("binary_sensor", suffix);
       if (!ent) return nothing;
-      const on = ent.state === "on";
       return html`<div
-        class="chip ${on ? "teal" : ""}"
+        class="chip ${ent.state === "on" ? "teal" : ""}"
         @click=${() => this._moreInfo(ent.entity_id)}
       >
-        <ha-icon icon="${icon}"></ha-icon>${label}
+        <ha-icon icon=${icon}></ha-icon>${label}
       </div>`;
     };
     return html`
       <div class="chips">
         ${chip("jour_ferie", "mdi:calendar-remove", "Férié")}
-        ${chip("weekend", "mdi:glass-cocktail", "Weekend")}
-        ${chip("vacances_scolaires", "mdi:beach", "Vacances sco")}
+        ${chip("weekend", "mdi:calendar-weekend", "Weekend")}
+        ${chip("vacances_scolaires", "mdi:school", "Vacances sco")}
+        ${chip("reveil_en_cours", "mdi:alarm-bell", "En cours")}
       </div>
     `;
   }
 
   private _renderQuickActions(): TemplateResult {
+    const { used, max } = this._snoozeInfo();
     return html`
       <div class="chips">
-        <div class="chip act" @click=${() => this._pressButton("sauter_prochain")}>
+        <div class="chip act" @click=${() => this._svc("sauter_prochain")}>
           <ha-icon icon="mdi:skip-next"></ha-icon>Skip 1×
         </div>
-        <div class="chip act" @click=${() => this._pressButton("declencher")}>
-          <ha-icon icon="mdi:play"></ha-icon>Test
+        <div class="chip act" @click=${() => this._svc("declencher")}>
+          <ha-icon icon="mdi:bell-ring"></ha-icon>Test
         </div>
-        ${this._config.show_stats ? this._renderStats() : nothing}
+        <div class="chip act" @click=${() => this._svc("reset")}>
+          <ha-icon icon="mdi:restart"></ha-icon>Reset
+        </div>
+        ${used > 0
+          ? html`<div class="chip stat-chip">
+              <ha-icon icon="mdi:alarm-snooze"></ha-icon>${used}${max !== null ? `/${max}` : ""}
+            </div>`
+          : nothing}
+      </div>
+    `;
+  }
+
+  private _renderFooter(): TemplateResult | typeof nothing {
+    const spec = (
+      suffix: string,
+      icon: string,
+      fmt: (v: number) => string
+    ): TemplateResult | typeof nothing => {
+      const v = this._num(suffix);
+      if (v === null) return nothing;
+      return html`<span @click=${() => this._moreInfo(this._e("number", suffix)?.entity_id)}>
+        <ha-icon icon=${icon}></ha-icon>${fmt(v)}
+      </span>`;
+    };
+    return html`
+      <div class="footer">
+        <div class="specs">
+          ${spec("volume_final", "mdi:volume-high", (v) => `${Math.round(v * 100)} %`)}
+          ${spec("luminosite_max", "mdi:brightness-5", (v) => `${Math.round((v / 255) * 100)} %`)}
+          ${spec("pre_chauffage_min", "mdi:radiator", (v) => `−${v} min`)}
+          ${spec("aube_min", "mdi:weather-sunset-up", (v) => `${v} min`)}
+          ${spec("cafe_avant_min", "mdi:coffee", (v) => `${v} min`)}
+        </div>
+        <ha-icon class="chev" icon="mdi:chevron-right" @click=${() => this._moreInfo(this._config.entity)}></ha-icon>
       </div>
     `;
   }
 
   private _renderStats(): TemplateResult | typeof nothing {
-    const n = this._e("sensor", "snooze_count")?.state;
-    if (n === undefined) return nothing;
-    return html`<div class="chip stat">
-      <ha-icon icon="mdi:alarm-snooze"></ha-icon>${n} snooze
-    </div>`;
-  }
-
-  private _renderFooter(): TemplateResult {
-    const num = (suffix: string): string | null => {
-      const e = this._e("number", suffix);
-      return e ? String(parseInt(e.state)) : null;
+    const cell = (suffix: string, label: string): TemplateResult | typeof nothing => {
+      const e = this._e("sensor", suffix);
+      if (!e) return nothing;
+      return html`<div class="stat" @click=${() => this._moreInfo(e.entity_id)}>
+        <div class="stat-v">${e.state}</div>
+        <div class="stat-l">${label}</div>
+      </div>`;
     };
-    const chauffe = num("pre_chauffage_min");
-    const aube = num("aube_min");
-    const vol = this._e("number", "volume_final")?.state;
+    const dernier = this._e("sensor", "dernier_reveil");
+    let dernierTxt: string | null = null;
+    if (dernier && !["unknown", "unavailable", ""].includes(dernier.state)) {
+      const d = new Date(dernier.state);
+      if (!isNaN(d.getTime())) {
+        dernierTxt =
+          d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) +
+          " à " +
+          d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+      }
+    }
     return html`
-      <div class="footer">
-        <div class="specs">
-          ${vol !== undefined
-            ? html`<span
-                @click=${() =>
-                  this._moreInfo(this._e("number", "volume_final")?.entity_id)}
-                ><ha-icon icon="mdi:music"></ha-icon>${Math.round(
-                  parseFloat(vol) * 100
-                )} %</span>`
-            : nothing}
-          ${chauffe
-            ? html`<span
-                @click=${() =>
-                  this._moreInfo(
-                    this._e("number", "pre_chauffage_min")?.entity_id
-                  )}
-                ><ha-icon icon="mdi:fire"></ha-icon>−${chauffe} min</span>`
-            : nothing}
-          ${aube
-            ? html`<span
-                @click=${() =>
-                  this._moreInfo(this._e("number", "aube_min")?.entity_id)}
-                ><ha-icon icon="mdi:weather-sunset-up"></ha-icon>${aube}
-                min</span>`
-            : nothing}
-        </div>
-        <ha-icon
-          class="chev"
-          icon="mdi:chevron-right"
-          @click=${() => this._moreInfo(this._config.entity)}
-        ></ha-icon>
+      <div class="stats">
+        ${cell("declenchements_total", "Réveils")}
+        ${cell("snoozes_total", "Snoozes")}
+        ${cell("stops_total", "Stops")}
       </div>
+      ${dernierTxt
+        ? html`<div class="last" @click=${() => this._moreInfo(dernier?.entity_id)}>
+            <ha-icon icon="mdi:history"></ha-icon>Dernier réveil : ${dernierTxt}
+          </div>`
+        : nothing}
     `;
   }
 
   private _renderRinging(): TemplateResult {
-    const snoozeMin = this._e("number", "snooze_min")?.state;
-    const escaladeMin = this._e("number", "escalade_min")?.state;
+    const snoozeMin = this._num("snooze_min");
+    const escaladeMin = this._num("escalade_min");
+    const { used, max } = this._snoozeInfo();
+    const snoozeLeft = max === null ? null : Math.max(0, max - used);
+    const canSnooze = snoozeLeft === null || snoozeLeft > 0;
+
     return html`
       <ha-card class="card ringing">
         <div class="header">
           <div class="id">
-            <div class="badge solid">
-              <ha-icon icon="mdi:bell-ring"></ha-icon>
+            <div class="badge-wrap">
+              <div class="badge solid"><ha-icon icon="mdi:bell-ring"></ha-icon></div>
             </div>
             <div class="titles">
               <div class="name ring-name">Ça sonne</div>
@@ -382,9 +491,13 @@ class SmartwakeCard extends LitElement {
         <div class="time"><span class="big">${this._heure}</span></div>
 
         <div class="actions">
-          <button class="btn snooze" @click=${() => this._svc("snooze")}>
+          <button class="btn snooze" ?disabled=${!canSnooze} @click=${() => this._svc("snooze")}>
             <ha-icon icon="mdi:alarm-snooze"></ha-icon>
-            <span>Snooze${snoozeMin ? ` ${parseInt(snoozeMin)} min` : ""}</span>
+            <span>
+              ${canSnooze
+                ? `Snooze${snoozeMin !== null ? ` ${snoozeMin} min` : ""}`
+                : "Plus de snooze"}
+            </span>
           </button>
           <button class="btn stop" @click=${() => this._svc("stop")}>
             <ha-icon icon="mdi:alarm-off"></ha-icon>
@@ -392,11 +505,14 @@ class SmartwakeCard extends LitElement {
           </button>
         </div>
 
-        ${escaladeMin
+        ${snoozeLeft !== null && canSnooze
+          ? html`<div class="ring-hint">${snoozeLeft} snooze${snoozeLeft > 1 ? "s" : ""} restant${snoozeLeft > 1 ? "s" : ""}</div>`
+          : nothing}
+
+        ${escaladeMin !== null
           ? html`<div class="footer esc">
               <ha-icon icon="mdi:progress-clock"></ha-icon>
-              Escalade après ${parseInt(escaladeMin)} min · lumières 100 % +
-              volume max
+              Escalade après ${escaladeMin} min · lumières + volume max
             </div>`
           : nothing}
       </ha-card>
@@ -428,6 +544,9 @@ class SmartwakeCard extends LitElement {
       opacity: 0.55;
     }
     .err {
+      display: flex;
+      align-items: center;
+      gap: 6px;
       color: var(--error-color);
       font-size: 13px;
     }
@@ -435,12 +554,19 @@ class SmartwakeCard extends LitElement {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 8px;
     }
     .id {
       display: flex;
       align-items: center;
       gap: 10px;
       min-width: 0;
+    }
+    .badge-wrap {
+      position: relative;
+      width: 36px;
+      height: 36px;
+      flex: none;
     }
     .badge {
       width: 36px;
@@ -449,11 +575,14 @@ class SmartwakeCard extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      flex: none;
     }
     .badge.amber {
       background: var(--sw-amber-bg);
       color: var(--sw-amber);
+    }
+    .badge.snooze {
+      background: var(--sw-teal-bg);
+      color: var(--sw-teal-text);
     }
     .badge.off {
       background: var(--secondary-background-color);
@@ -465,6 +594,27 @@ class SmartwakeCard extends LitElement {
     }
     .badge ha-icon {
       --mdc-icon-size: 20px;
+    }
+    /* Anneau de progression prewake */
+    .ring {
+      position: absolute;
+      inset: -4px;
+      width: 44px;
+      height: 44px;
+      transform: rotate(-90deg);
+      pointer-events: none;
+    }
+    .ring circle {
+      fill: none;
+      stroke-width: 3;
+    }
+    .ring-bg {
+      stroke: var(--sw-amber-bg);
+    }
+    .ring-fg {
+      stroke: var(--sw-amber);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.6s linear;
     }
     .titles {
       min-width: 0;
@@ -502,10 +652,36 @@ class SmartwakeCard extends LitElement {
       font-size: 13px;
       color: var(--secondary-text-color);
     }
+    /* Barre de progression prewake */
+    .prewake-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .bar {
+      height: 6px;
+      border-radius: 3px;
+      background: var(--secondary-background-color);
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--sw-amber);
+      transition: width 0.6s linear;
+    }
+    .bar-legend {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--secondary-text-color);
+    }
     .days {
       display: flex;
       gap: 6px;
       align-items: center;
+      flex-wrap: wrap;
       cursor: pointer;
     }
     .day {
@@ -529,7 +705,6 @@ class SmartwakeCard extends LitElement {
       font-size: 12px;
       color: var(--secondary-text-color);
       margin-left: 4px;
-      text-transform: capitalize;
     }
     .chips {
       display: flex;
@@ -558,7 +733,7 @@ class SmartwakeCard extends LitElement {
     .chip.act:active {
       transform: scale(0.96);
     }
-    .chip.stat {
+    .chip.stat-chip {
       cursor: default;
       margin-left: auto;
     }
@@ -566,6 +741,7 @@ class SmartwakeCard extends LitElement {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 8px;
       border-top: 1px solid var(--divider-color);
       padding-top: 10px;
       font-size: 12px;
@@ -573,7 +749,8 @@ class SmartwakeCard extends LitElement {
     }
     .specs {
       display: flex;
-      gap: 14px;
+      gap: 12px;
+      flex-wrap: wrap;
     }
     .specs span {
       display: inline-flex;
@@ -582,12 +759,49 @@ class SmartwakeCard extends LitElement {
       cursor: pointer;
     }
     .specs ha-icon,
-    .footer ha-icon {
+    .footer ha-icon,
+    .last ha-icon {
       --mdc-icon-size: 14px;
     }
     .chev {
       cursor: pointer;
       --mdc-icon-size: 16px;
+      flex: none;
+    }
+    /* Statistiques */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      border-top: 1px solid var(--divider-color);
+      padding-top: 10px;
+    }
+    .stat {
+      text-align: center;
+      padding: 6px 4px;
+      border-radius: 10px;
+      background: var(--secondary-background-color);
+      cursor: pointer;
+    }
+    .stat-v {
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--primary-text-color);
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-l {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: var(--secondary-text-color);
+    }
+    .last {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--secondary-text-color);
+      cursor: pointer;
     }
     /* --- État sonnerie --- */
     .card.ringing {
@@ -602,6 +816,9 @@ class SmartwakeCard extends LitElement {
       50% {
         box-shadow: 0 0 0 8px rgba(239, 159, 39, 0);
       }
+    }
+    .card.prewake {
+      border-left: 3px solid var(--sw-amber);
     }
     .actions {
       display: grid;
@@ -625,6 +842,10 @@ class SmartwakeCard extends LitElement {
     .btn:active {
       transform: scale(0.97);
     }
+    .btn[disabled] {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
     .btn ha-icon {
       --mdc-icon-size: 24px;
     }
@@ -635,6 +856,11 @@ class SmartwakeCard extends LitElement {
     .btn.stop {
       background: var(--sw-red-bg);
       color: var(--sw-red-text);
+    }
+    .ring-hint {
+      text-align: center;
+      font-size: 11px;
+      color: var(--secondary-text-color);
     }
     .footer.esc {
       justify-content: flex-start;
@@ -656,6 +882,6 @@ window.customCards.push({
   type: "smartwake-card",
   name: "SmartWAKE Card",
   description:
-    "Carte réveil pour SmartWAKE : heure, jours, contexte, snooze/stop.",
+    "Carte réveil pour SmartWAKE : heure, jours, contexte, progression du pré-réveil, snooze/stop.",
   preview: true,
 });
