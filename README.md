@@ -2,7 +2,9 @@
 
 Carte Lovelace custom pour l'intégration [SmartWAKE](https://github.com/junkoku38/smartwake).
 
-**v3** — alignée sur l'intégration SmartWAKE 2.4.0, avec anneau de progression du pré-réveil.
+**v3.2** — éditeur visuel de configuration, panneau de réglages éditable et
+anneau de progression du pré-réveil. Alignée sur les entités de l'intégration
+SmartWAKE 2.5.7.
 
 ## Design
 
@@ -33,9 +35,11 @@ paramètres directement depuis la carte**, sans passer par les fiches
 Les steppers respectent le `step`, le `min` et le `max` déclarés par chaque
 entité `number` et se désactivent aux bornes.
 
-> **Requiert SmartWAKE ≥ 2.4.1.** Les versions antérieures ont un bug qui rend
+> **Requiert SmartWAKE ≥ 2.5.7.** Les versions antérieures ont un bug qui rend
 > les 10 entités `number` non modifiables (`AttributeError` sur `self.entry`
-> dans `number.py`). Voir le correctif dans le dépôt de l'intégration.
+> dans `number.py`) : les steppers resteront sans effet. Cette même version
+> corrige aussi un `UnboundLocalError` qui empêchait le cycle de réveil de
+> s'exécuter.
 
 Le rafraîchissement passe automatiquement de 30 s à 5 s pendant le `prewake`
 pour une progression fluide.
