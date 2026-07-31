@@ -180,20 +180,19 @@ name: Réveil weekend
 ## Heure affichée et heure de référence
 
 L'intégration peut planifier un réveil à une heure différente de
-`time.<nom>_heure` dans trois cas :
+`time.<nom>_heure` dans deux cas :
 
 | Mécanisme | Option de l'intégration |
 | --- | --- |
 | Heures différentes selon le jour | `mode_heure: par_jour` + `heure_lundi`… |
 | Décalage selon le premier rendez-vous | `adaptatif_agenda` |
-| Décalage selon la phase de sommeil | `sommeil_phase` (Withings) |
 
 La carte affiche donc l'heure issue de `sensor.<nom>_prochain_reveil`, qui est
 la seule source fiable. Lorsqu'elle diffère de `time.<nom>_heure`, la mention
 **« ajustée depuis HH:MM »** apparaît sous le compte à rebours, et le panneau de
 réglages renomme le champ en *Heure de référence*.
 
-> Ces trois options ne sont exposées par aucune entité : elles se configurent
+> L'agenda adaptatif n'est exposé par aucune entité : elles se configurent
 > uniquement dans les options de l'intégration. La carte ne peut ni les lire ni
 > les modifier, elle en constate seulement l'effet.
 

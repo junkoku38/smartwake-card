@@ -225,7 +225,7 @@ class SmartwakeCard extends LitElement {
 
   /* Heure réellement planifiée, déduite de sensor.prochain_reveil.
    * Peut différer de time.heure dans trois cas gérés par l'intégration :
-   * mode_heure = par_jour, agenda adaptatif, phase de sommeil. */
+   * mode_heure = par_jour, agenda adaptatif. */
   private get _heureEffective(): string | null {
     const ts = this._nextTs();
     if (ts === null) return null;
@@ -444,7 +444,7 @@ class SmartwakeCard extends LitElement {
               ? html`<span
                   class="adj"
                   title="L'heure planifiée diffère de l'heure de référence (${this
-                    ._heureConfig}) : heures par jour, agenda adaptatif ou phase de sommeil."
+                    ._heureConfig}) : heures par jour ou agenda adaptatif."
                 >
                   <ha-icon icon="mdi:calendar-sync"></ha-icon>ajustée depuis
                   ${this._heureConfig}
@@ -754,8 +754,8 @@ class SmartwakeCard extends LitElement {
         ${this._heureAjustee
           ? html`<div class="hint">
               Le prochain réveil est planifié à ${this._heureEffective}. Les heures
-              par jour, l'agenda adaptatif et la phase de sommeil se configurent
-              dans les options de l'intégration.
+              par jour et l'agenda adaptatif se configurent dans les options de
+              l'intégration.
             </div>`
           : nothing}
 
