@@ -1,4 +1,5 @@
-# SmartWAKE Card
+<img src="brand/logo.png" alt="SmartWAKE Card" height="72">
+
 
 Carte Lovelace custom pour l'intégration [SmartWAKE](https://github.com/junkoku38/smartwake).
 
