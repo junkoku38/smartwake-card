@@ -5,6 +5,7 @@
   "main": "dist/smartwake-card.js",
   "scripts": {
     "build": "rollup -c",
+    "build:release": "rollup -c && cp dist/smartwake-card.js smartwake-card.js",
     "dev": "rollup -c --watch"
   },
   "keywords": [
