@@ -71,6 +71,11 @@ resources:
 
 ## Configuration
 
+La carte fournit un **éditeur visuel** : *Ajouter une carte → SmartWAKE Card*
+propose directement un formulaire (sélecteur de réveil filtré sur l'intégration
+SmartWAKE, nom, et interrupteurs d'affichage). Le YAML reste disponible via
+*Afficher l'éditeur de code*.
+
 ```yaml
 type: custom:smartwake-card
 entity: switch.reveil_actif

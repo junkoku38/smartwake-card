@@ -83,6 +83,11 @@ class SmartwakeCard extends LitElement {
     return { entity: "switch.reveil_actif", name: "Réveil" };
   }
 
+  /* Éditeur visuel dans l'UI Lovelace */
+  static getConfigElement(): HTMLElement {
+    return document.createElement("smartwake-card-editor");
+  }
+
   setConfig(config: SmartwakeCardConfig): void {
     if (!config.entity || !config.entity.startsWith("switch.")) {
       throw new Error(
@@ -1120,6 +1125,99 @@ class SmartwakeCard extends LitElement {
 }
 
 customElements.define("smartwake-card", SmartwakeCard);
+
+/* ---------------------------------------------------------------
+ * Éditeur visuel de configuration
+ * ------------------------------------------------------------- */
+
+const EDITOR_SCHEMA = [
+  {
+    name: "entity",
+    required: true,
+    selector: { entity: { integration: "smartwake", domain: "switch" } },
+  },
+  { name: "name", selector: { text: {} } },
+  {
+    type: "grid",
+    name: "",
+    schema: [
+      { name: "show_context", selector: { boolean: {} } },
+      { name: "show_settings", selector: { boolean: {} } },
+      { name: "show_stats", selector: { boolean: {} } },
+    ],
+  },
+];
+
+const EDITOR_LABELS: Record<string, string> = {
+  entity: "Réveil (switch SmartWAKE)",
+  name: "Nom affiché",
+  show_context: "Chips contextuelles",
+  show_settings: "Réglages",
+  show_stats: "Statistiques",
+};
+
+const EDITOR_HELPERS: Record<string, string> = {
+  name: "Laisser vide pour utiliser « SmartWAKE »",
+  show_context: "Férié, weekend, vacances scolaires, réveil en cours",
+  show_settings: "Footer et panneau d'édition des paramètres",
+  show_stats: "Compteurs cumulés et date du dernier réveil",
+};
+
+class SmartwakeCardEditor extends LitElement {
+  @property({ attribute: false }) hass!: HomeAssistant;
+  @state() private _config!: SmartwakeCardConfig;
+
+  setConfig(config: SmartwakeCardConfig): void {
+    this._config = {
+      show_stats: true,
+      show_context: true,
+      show_settings: true,
+      ...config,
+    };
+  }
+
+  private _label = (schema: { name: string }): string =>
+    EDITOR_LABELS[schema.name] ?? schema.name;
+
+  private _helper = (schema: { name: string }): string =>
+    EDITOR_HELPERS[schema.name] ?? "";
+
+  private _valueChanged(ev: CustomEvent): void {
+    ev.stopPropagation();
+    const config = { ...ev.detail.value };
+    /* Un nom vide doit disparaître de la config plutôt que d'être stocké */
+    if (config.name === "") delete config.name;
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  render(): TemplateResult {
+    if (!this.hass || !this._config) return html``;
+    return html`
+      <ha-form
+        .hass=${this.hass}
+        .data=${this._config}
+        .schema=${EDITOR_SCHEMA}
+        .computeLabel=${this._label}
+        .computeHelper=${this._helper}
+        @value-changed=${this._valueChanged}
+      ></ha-form>
+    `;
+  }
+
+  static styles = css`
+    ha-form {
+      display: block;
+    }
+  `;
+}
+
+customElements.define("smartwake-card-editor", SmartwakeCardEditor);
 
 declare global {
   interface Window {
