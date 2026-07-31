@@ -1,7 +1,7 @@
 {
   "name": "smartwake-card",
-  "version": "1.0.0",
-  "description": "Custom Lovelace card for SmartWAKE — progressive alarm integration",
+  "version": "3.5.1",
+  "description": "Custom Lovelace card for SmartWAKE \u2014 progressive alarm integration",
   "main": "dist/smartwake-card.js",
   "scripts": {
     "build": "rollup -c",
