@@ -723,13 +723,27 @@ class SmartwakeCard extends i {
             ? b `<div class="row wrap">
               <span class="row-label">Jours</span>
               <div class="modes">
-                ${["tous", "semaine", "weekend", "personnalise"].map((m) => b `<button
+                <!-- « Personnalisé » est volontairement absent : il suppose une
+                     liste de jours qu'aucune entité n'expose, et l'appliquer
+                     depuis la carte désactiverait le réveil sans le dire. -->
+                ${["tous", "semaine", "weekend"].map((m) => b `<button
                     class="mode-btn ${mode === m ? "sel" : ""}"
                     @click=${() => this._setJours(m)}
                   >
                     ${MODE_LABEL[m]}
                   </button>`)}
+                ${mode === "personnalise"
+                ? b `<span class="mode-btn sel lecture">
+                      ${MODE_LABEL.personnalise}
+                    </span>`
+                : A}
               </div>
+            </div>`
+            : A}
+        ${mode === "personnalise"
+            ? b `<div class="hint">
+              Les jours personnalisés se choisissent dans les options de
+              l'intégration.
             </div>`
             : A}
 
@@ -941,6 +955,7 @@ SmartwakeCard.styles = i$3 `
     .titles {
       min-width: 0;
     }
+
     .name {
       font-size: 13px;
       font-weight: 600;
@@ -1232,6 +1247,9 @@ SmartwakeCard.styles = i$3 `
       font-size: 11px;
       padding: 6px 9px;
       color: var(--secondary-text-color);
+    }
+    .mode-btn.lecture {
+      cursor: default;
     }
     .mode-btn.sel {
       background: var(--sw-amber-bg);
