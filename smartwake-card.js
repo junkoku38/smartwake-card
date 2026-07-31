@@ -97,6 +97,16 @@ class SmartwakeCard extends i {
         this._now = Date.now();
         this._open = false;
         this._tickMs = 0;
+        /* Entités du même appareil, groupées par domaine.
+         *
+         * La déduction du préfixe depuis `switch.<prefixe>_actif` suppose que tous
+         * les entity_id partagent ce préfixe. Or ils sont produits par le slugify de
+         * Home Assistant sur « nom du réveil + nom de l'entité », et le nom du réveil
+         * accepte désormais accents et tirets : la déduction peut donc échouer.
+         * Passer par l'appareil est fiable quel que soit le nom.
+         */
+        this._famille = null;
+        this._familleClef = "";
     }
     static getStubConfig() {
         return { entity: "switch.reveil_actif", name: "Réveil" };
@@ -151,7 +161,37 @@ class SmartwakeCard extends i {
     _st(entityId) {
         return this.hass?.states[entityId];
     }
+    _entitesDeLAppareil() {
+        const registre = this.hass?.entities;
+        const deviceId = registre?.[this._config.entity]?.device_id;
+        if (!registre || !deviceId)
+            return null;
+        const clef = `${deviceId}|${Object.keys(registre).length}`;
+        if (this._famille && this._familleClef === clef)
+            return this._famille;
+        const parDomaine = {};
+        for (const [entityId, entree] of Object.entries(registre)) {
+            if (entree?.device_id !== deviceId)
+                continue;
+            const domaine = entityId.slice(0, entityId.indexOf("."));
+            (parDomaine[domaine] ??= []).push(entityId);
+        }
+        // Le plus court d'abord : « _heure » ne doit pas capter « _heure_lundi »
+        for (const liste of Object.values(parDomaine)) {
+            liste.sort((a, b) => a.length - b.length);
+        }
+        this._famille = parDomaine;
+        this._familleClef = clef;
+        return parDomaine;
+    }
     _e(domain, suffix) {
+        const candidats = this._entitesDeLAppareil()?.[domain];
+        if (candidats) {
+            const cible = candidats.find((id) => id.endsWith(`_${suffix}`));
+            if (cible)
+                return this._st(cible);
+        }
+        // Repli : déduction du préfixe depuis l'entité configurée
         return this._st(`${domain}.${this._base}_${suffix}`);
     }
     _num(suffix) {

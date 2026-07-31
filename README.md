@@ -101,8 +101,15 @@ name: Réveil semaine
 | `show_context`  | bool   | true      | Afficher les chips Férié / Weekend / Vacances sco  |
 | `show_settings` | bool   | true      | Afficher le footer réglages et le panneau d'édition|
 
-Toutes les autres entités sont **résolues automatiquement** à partir du préfixe
-du switch — aucune configuration supplémentaire.
+Toutes les autres entités sont **résolues automatiquement** — aucune
+configuration supplémentaire.
+
+La résolution passe par l'**appareil** auquel appartient le switch : la carte
+lit le registre d'entités, retient celles du même appareil, et identifie chacune
+par son suffixe. Elle reste donc correcte même si vous renommez les `entity_id`
+dans Home Assistant, ce qui casserait une simple déduction de préfixe. Si le
+registre n'est pas accessible (versions anciennes de HA), la carte retombe sur
+la déduction depuis `switch.<préfixe>_actif`.
 
 ### Entités lues
 
