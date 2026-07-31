@@ -440,15 +440,45 @@ class SmartwakeCard extends i {
       </div>
     `;
     }
+    /* Vrai si l'intégration utilise une heure distincte par jour */
+    get _parJour() {
+        return this._e("select", "mode_heure")?.state === "par_jour";
+    }
+    /* Heure propre à un jour, si définie (time.<nom>_heure_lundi …) */
+    _heureDuJour(jour) {
+        const ent = this._e("time", `heure_${jour}`);
+        if (!ent || ["unknown", "unavailable", ""].includes(ent.state))
+            return null;
+        return ent.state.substring(0, 5);
+    }
     _renderDays() {
         const sel = this._e("select", "jours");
         const active = this._activeDays();
         const mode = sel?.state.toLowerCase() ?? "";
+        const parJour = this._parJour;
         return b `
-      <div class="days" @click=${() => this._moreInfo(sel?.entity_id)}>
-        ${DAYS.map(([day, label]) => b `<div class="day ${active?.includes(day) ? "on" : ""}">${label}</div>`)}
+      <div class="days ${parJour ? "with-hours" : ""}">
+        ${DAYS.map(([day, label]) => {
+            const on = active?.includes(day) ?? false;
+            const heure = parJour ? this._heureDuJour(day) : null;
+            const ent = parJour
+                ? this._e("time", `heure_${day}`)?.entity_id
+                : sel?.entity_id;
+            return b `
+            <div class="day-col" @click=${() => this._moreInfo(ent)}>
+              <div class="day ${on ? "on" : ""}">${label}</div>
+              ${parJour
+                ? b `<span class="day-hour ${on ? "" : "off"}"
+                    >${heure ?? this._heureConfig}</span
+                  >`
+                : A}
+            </div>
+          `;
+        })}
         ${!active && sel
-            ? b `<span class="mode">${MODE_LABEL[mode] ?? sel.state}</span>`
+            ? b `<span class="mode" @click=${() => this._moreInfo(sel.entity_id)}
+              >${MODE_LABEL[mode] ?? sel.state}</span
+            >`
             : A}
       </div>
     `;
@@ -465,14 +495,89 @@ class SmartwakeCard extends i {
         <ha-icon icon=${icon}></ha-icon>${label}
       </div>`;
         };
+        /* Interrupteurs : la chip bascule l'état au clic */
+        const bascule = (suffix, icon, label, couleur) => {
+            const ent = this._e("switch", suffix);
+            if (!ent)
+                return A;
+            const on = ent.state === "on";
+            if (!on)
+                return A; // n'affiche que si actif, pour rester compact
+            return b `<div
+        class="chip ${couleur}"
+        title="Cliquer pour annuler"
+        @click=${() => this._toggleSwitch(ent.entity_id)}
+      >
+        <ha-icon icon=${icon}></ha-icon>${label}
+        <ha-icon class="chip-x" icon="mdi:close"></ha-icon>
+      </div>`;
+        };
         return b `
       <div class="chips">
+        ${bascule("mode_vacances", "mdi:beach", "Mode vacances", "amber-chip")}
+        ${bascule("saut_du_prochain", "mdi:skip-next", "Prochain sauté", "amber-chip")}
         ${chip("jour_ferie", "mdi:calendar-remove", "Férié")}
         ${chip("weekend", "mdi:calendar-weekend", "Weekend")}
         ${chip("vacances_scolaires", "mdi:school", "Vacances sco")}
         ${chip("reveil_en_cours", "mdi:alarm-bell", "En cours")}
       </div>
     `;
+    }
+    _toggleSwitch(entityId) {
+        this.hass.callService("switch", "toggle", { entity_id: entityId });
+    }
+    _renderInterrupteur(suffix, label) {
+        const ent = this._e("switch", suffix);
+        if (!ent)
+            return A;
+        return b `
+      <div class="row">
+        <span class="row-label" @click=${() => this._moreInfo(ent.entity_id)}>
+          ${label}
+        </span>
+        <ha-switch
+          .checked=${ent.state === "on"}
+          @change=${() => this._toggleSwitch(ent.entity_id)}
+        ></ha-switch>
+      </div>
+    `;
+    }
+    _renderModeHeure() {
+        const ent = this._e("select", "mode_heure");
+        if (!ent)
+            return A;
+        const courant = ent.state;
+        const options = [
+            ["unique", "Heure unique"],
+            ["par_jour", "Par jour"],
+        ];
+        return b `
+      <div class="row wrap">
+        <span class="row-label" @click=${() => this._moreInfo(ent.entity_id)}>
+          Mode d'heure
+        </span>
+        <div class="modes">
+          ${options.map(([val, lab]) => b `<button
+              class="mode-btn ${courant === val ? "sel" : ""}"
+              @click=${() => this._setSelect(ent.entity_id, val)}
+            >
+              ${lab}
+            </button>`)}
+        </div>
+      </div>
+      ${courant === "par_jour"
+            ? b `<div class="hint">
+            Chaque jour utilise l'heure de sa pastille ci-dessus. Un jour sans
+            heure définie retombe sur l'heure de référence.
+          </div>`
+            : A}
+    `;
+    }
+    _setSelect(entityId, option) {
+        this.hass.callService("select", "select_option", {
+            entity_id: entityId,
+            option,
+        });
     }
     _renderQuickActions() {
         const { used, max } = this._snoozeInfo();
@@ -587,6 +692,10 @@ class SmartwakeCard extends i {
               </div>
             </div>`
             : A}
+
+        ${this._renderModeHeure()}
+        ${this._renderInterrupteur("mode_vacances", "Mode vacances")}
+        ${this._renderInterrupteur("saut_du_prochain", "Sauter le prochain")}
 
         ${stepper("snooze_min", "Durée snooze", (v) => `${v} min`)}
         ${stepper("max_snooze", "Snooze max", (v) => `${v}`)}
@@ -873,6 +982,32 @@ SmartwakeCard.styles = i$3 `
       align-items: center;
       flex-wrap: wrap;
       cursor: pointer;
+    }
+    .days.with-hours {
+      align-items: flex-start;
+    }
+    .day-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+    .day-hour {
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      color: var(--sw-amber-text);
+    }
+    .day-hour.off {
+      color: var(--disabled-text-color);
+    }
+    .amber-chip {
+      background: var(--sw-amber-bg);
+      color: var(--sw-amber-text);
+      font-weight: 600;
+    }
+    .chip-x {
+      --mdc-icon-size: 12px;
+      opacity: 0.7;
     }
     .day {
       width: 34px;

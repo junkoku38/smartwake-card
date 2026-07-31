@@ -13,7 +13,10 @@ SmartWAKE 2.5.7.
 - **Anneau de progression** autour de l'icône pendant la phase `prewake`, doublé d'une **barre de progression** avec pourcentage, minutes restantes et rappel des durées d'aube / pré-chauffage
 - **Heure** en 44 px avec compte à rebours ("dans 8 h 12 min"), déduite de
   `sensor.<nom>_prochain_reveil` afin de refléter l'heure réellement planifiée
-- **Jours** : 7 pastilles rondes L Ma Me J V S D, actives en ambre (tap → sélecteur de jours)
+- **Jours** : 7 pastilles rondes L Ma Me J V S D, actives en ambre (tap → sélecteur de jours).
+  En mode `par_jour`, l'heure de chaque jour est affichée sous sa pastille
+- **Chips d'état annulables** : « Mode vacances » et « Prochain sauté » apparaissent
+  quand ils sont actifs et se désactivent d'un clic
 - **Chips contextuelles** : Férié / Weekend / Vacances sco / En cours (vertes quand actives)
 - **Actions rapides** : Skip 1× · Test · Reset · compteur de snoozes (`utilisés/max`)
 - **Footer réglages** : volume final · luminosité max · pré-chauffage · aube · café (tap → réglage)
@@ -29,6 +32,8 @@ paramètres directement depuis la carte**, sans passer par les fiches
 |---|---|
 | Heure | champ `time` + boutons −5 / +5 min |
 | Jours | 4 boutons : Tous / Lundi-vendredi / Samedi-dimanche / Personnalisé |
+| Mode d'heure | Heure unique / Par jour |
+| Mode vacances, Sauter le prochain | interrupteurs |
 | Durée snooze, Snooze max | steppers −/+ |
 | Aube, Pré-chauffage, Durée éclairage, Escalade, Café avant | steppers −/+ |
 | Luminosité max, Volume initial, Volume final | steppers −/+ affichés en % |
@@ -36,11 +41,12 @@ paramètres directement depuis la carte**, sans passer par les fiches
 Les steppers respectent le `step`, le `min` et le `max` déclarés par chaque
 entité `number` et se désactivent aux bornes.
 
-> **Requiert SmartWAKE ≥ 2.5.7.** Les versions antérieures ont un bug qui rend
-> les 10 entités `number` non modifiables (`AttributeError` sur `self.entry`
-> dans `number.py`) : les steppers resteront sans effet. Cette même version
-> corrige aussi un `UnboundLocalError` qui empêchait le cycle de réveil de
-> s'exécuter.
+> **Requiert SmartWAKE ≥ 2.10.0.** Les entités `mode_heure`, `mode_vacances`,
+> `saut_du_prochain` et les heures par jour n'existent qu'à partir de 2.7.0, et
+> les versions antérieures à 2.10.0 comportent plusieurs bugs bloquants
+> (réglages non modifiables, réveil désarmé par toute modification, heures par
+> jour sonnant tous les jours). Les éléments correspondants sont simplement
+> masqués si l'intégration est plus ancienne.
 
 Le rafraîchissement passe automatiquement de 30 s à 5 s pendant le `prewake`
 pour une progression fluide.
