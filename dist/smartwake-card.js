@@ -640,6 +640,34 @@ class SmartwakeCard extends i {
             : A}
     `;
     }
+    /* Mode de travail : présentiel / télétravail / non précisé.
+     * Exposé en entité par l'intégration ≥ 2.23.0 ; masqué en deçà. */
+    _renderModeTravail() {
+        const ent = this._e("select", "mode_travail");
+        if (!ent)
+            return A;
+        const courant = ent.state;
+        const options = [
+            ["presentiel", "Présentiel"],
+            ["teletravail", "Télétravail"],
+            ["indetermine", "—"],
+        ];
+        return b `
+      <div class="row wrap">
+        <span class="row-label" @click=${() => this._moreInfo(ent.entity_id)}>
+          Mode de travail
+        </span>
+        <div class="modes">
+          ${options.map(([val, lab]) => b `<button
+              class="mode-btn ${courant === val ? "sel" : ""}"
+              @click=${() => this._setSelect(ent.entity_id, val)}
+            >
+              ${lab}
+            </button>`)}
+        </div>
+      </div>
+    `;
+    }
     _setSelect(entityId, option) {
         this.hass.callService("select", "select_option", {
             entity_id: entityId,
@@ -775,6 +803,7 @@ class SmartwakeCard extends i {
             : A}
 
         ${this._renderModeHeure()}
+        ${this._renderModeTravail()}
         ${this._renderInterrupteur("mode_vacances", "Mode vacances")}
         ${this._renderInterrupteur("saut_du_prochain", "Sauter le prochain")}
 

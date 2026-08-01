@@ -668,6 +668,36 @@ class SmartwakeCard extends LitElement {
     `;
   }
 
+  /* Mode de travail : présentiel / télétravail / non précisé.
+   * Exposé en entité par l'intégration ≥ 2.23.0 ; masqué en deçà. */
+  private _renderModeTravail(): TemplateResult | typeof nothing {
+    const ent = this._e("select", "mode_travail");
+    if (!ent) return nothing;
+    const courant = ent.state;
+    const options: Array<[string, string]> = [
+      ["presentiel", "Présentiel"],
+      ["teletravail", "Télétravail"],
+      ["indetermine", "—"],
+    ];
+    return html`
+      <div class="row wrap">
+        <span class="row-label" @click=${() => this._moreInfo(ent.entity_id)}>
+          Mode de travail
+        </span>
+        <div class="modes">
+          ${options.map(
+            ([val, lab]) => html`<button
+              class="mode-btn ${courant === val ? "sel" : ""}"
+              @click=${() => this._setSelect(ent.entity_id, val)}
+            >
+              ${lab}
+            </button>`
+          )}
+        </div>
+      </div>
+    `;
+  }
+
   private _setSelect(entityId: string, option: string): void {
     this.hass.callService("select", "select_option", {
       entity_id: entityId,
@@ -816,6 +846,7 @@ class SmartwakeCard extends LitElement {
           : nothing}
 
         ${this._renderModeHeure()}
+        ${this._renderModeTravail()}
         ${this._renderInterrupteur("mode_vacances", "Mode vacances")}
         ${this._renderInterrupteur("saut_du_prochain", "Sauter le prochain")}
 

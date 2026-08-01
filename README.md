@@ -34,6 +34,7 @@ paramètres directement depuis la carte**, sans passer par les fiches
 | Heure | champ `time` + boutons −5 / +5 min |
 | Jours | 4 boutons : Tous / Lundi-vendredi / Samedi-dimanche / Personnalisé |
 | Mode d'heure | Heure unique / Par jour |
+| Mode de travail | Présentiel / Télétravail / — |
 | Mode vacances, Sauter le prochain | interrupteurs |
 | Durée snooze, Snooze max | steppers −/+ |
 | Aube, Pré-chauffage, Durée éclairage, Escalade, Café avant | steppers −/+ |
