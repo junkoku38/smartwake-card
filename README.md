@@ -123,6 +123,7 @@ select.reveil_jours                     # tous | semaine | weekend | personnalis
 sensor.reveil_statut                    # idle|prewake|ringing|snoozed|done|inactif
 sensor.reveil_prochain_reveil           # compte à rebours + progression prewake
 sensor.reveil_snooze_utilises           # compteur de snoozes
+sensor.reveil_fin_du_snooze             # compte à rebours du snooze
 sensor.reveil_declenchements_total      # statistiques
 sensor.reveil_snoozes_total
 sensor.reveil_stops_total

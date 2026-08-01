@@ -137,7 +137,11 @@ class SmartwakeCard extends LitElement {
   /* Rafraîchissement accéléré pendant le prewake pour une progression fluide */
   protected updated(): void {
     if (!this._config || !this.hass || !this._tick) return;
-    const wanted = this._statut === "prewake" ? 5_000 : 30_000;
+    // Un compte à rebours de snooze n'a de sens qu'actualisé à la seconde ;
+    // la rampe de pré-réveil se contente de 5 s.
+    const statut = this._statut;
+    const wanted =
+      statut === "snoozed" ? 1_000 : statut === "prewake" ? 5_000 : 30_000;
     if (wanted !== this._tickMs) this._startTick(wanted);
   }
 
@@ -291,6 +295,24 @@ class SmartwakeCard extends LitElement {
     return { used: isNaN(used) ? 0 : used, max: this._num("max_snooze") };
   }
 
+  /* Temps restant avant la reprise de la sonnerie, décompté à la seconde.
+   * Seule la durée configurée était affichée : le message restait figé sur
+   * « Re-sonne dans 5 min » pendant tout le snooze. */
+  private _snoozeRestant(): string | null {
+    const ent = this._e("sensor", "fin_du_snooze");
+    if (!ent || ["unknown", "unavailable", ""].includes(ent.state)) return null;
+    const fin = new Date(ent.state).getTime();
+    if (isNaN(fin)) return null;
+
+    const restant = Math.max(0, Math.round((fin - this._now) / 1000));
+    const min = Math.floor(restant / 60);
+    const sec = restant % 60;
+    if (restant === 0) return "un instant";
+    return min > 0
+      ? `${min} min ${String(sec).padStart(2, "0")} s`
+      : `${sec} s`;
+  }
+
   private _subtitle(): string {
     const s = this._statut;
 
@@ -300,6 +322,10 @@ class SmartwakeCard extends LitElement {
       return "Debout !";
     }
     if (s === "snoozed") {
+      const restant = this._snoozeRestant();
+      if (restant !== null) return `Re-sonne dans ${restant}`;
+      // Sans le capteur de fin de snooze (intégration antérieure à 2.19.0),
+      // on ne peut afficher que la durée configurée, sans décompte.
       const min = this._num("snooze_min");
       return min !== null ? `Re-sonne dans ${min} min` : "Snooze en cours";
     }
