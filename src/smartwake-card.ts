@@ -737,10 +737,6 @@ class SmartwakeCard extends LitElement {
     const { used, max } = this._snoozeInfo();
     return html`
       <div class="chips">
-        <div class="chip act" title="Tester le réveil immédiatement"
-             @click=${() => this._svc("declencher")}>
-          <ha-icon icon="mdi:bell-ring"></ha-icon>Test
-        </div>
         <div class="chip act" title="Passer le prochain réveil une seule fois"
              @click=${() => this._svc("sauter_prochain")}>
           <ha-icon icon="mdi:skip-next"></ha-icon>Skip 1×
@@ -877,10 +873,7 @@ class SmartwakeCard extends LitElement {
           ? html`<div class="row wrap">
               <span class="row-label">Jours</span>
               <div class="modes">
-                <!-- « Personnalisé » est volontairement absent : il suppose une
-                     liste de jours qu'aucune entité n'expose, et l'appliquer
-                     depuis la carte désactiverait le réveil sans le dire. -->
-                ${["tous", "semaine", "weekend"].map(
+                ${["tous", "semaine", "weekend", "personnalise"].map(
                   (m) => html`<button
                     class="mode-btn ${mode === m ? "sel" : ""}"
                     @click=${() => this._setJours(m)}
@@ -888,18 +881,7 @@ class SmartwakeCard extends LitElement {
                     ${MODE_LABEL[m]}
                   </button>`
                 )}
-                ${mode === "personnalise"
-                  ? html`<span class="mode-btn sel lecture">
-                      ${MODE_LABEL.personnalise}
-                    </span>`
-                  : nothing}
               </div>
-            </div>`
-          : nothing}
-        ${mode === "personnalise"
-          ? html`<div class="hint">
-              Les jours personnalisés se choisissent dans les options de
-              l'intégration.
             </div>`
           : nothing}
 

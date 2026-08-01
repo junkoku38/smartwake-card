@@ -706,10 +706,6 @@ class SmartwakeCard extends i {
         const { used, max } = this._snoozeInfo();
         return b `
       <div class="chips">
-        <div class="chip act" title="Tester le réveil immédiatement"
-             @click=${() => this._svc("declencher")}>
-          <ha-icon icon="mdi:bell-ring"></ha-icon>Test
-        </div>
         <div class="chip act" title="Passer le prochain réveil une seule fois"
              @click=${() => this._svc("sauter_prochain")}>
           <ha-icon icon="mdi:skip-next"></ha-icon>Skip 1×
@@ -832,27 +828,13 @@ class SmartwakeCard extends i {
             ? b `<div class="row wrap">
               <span class="row-label">Jours</span>
               <div class="modes">
-                <!-- « Personnalisé » est volontairement absent : il suppose une
-                     liste de jours qu'aucune entité n'expose, et l'appliquer
-                     depuis la carte désactiverait le réveil sans le dire. -->
-                ${["tous", "semaine", "weekend"].map((m) => b `<button
+                ${["tous", "semaine", "weekend", "personnalise"].map((m) => b `<button
                     class="mode-btn ${mode === m ? "sel" : ""}"
                     @click=${() => this._setJours(m)}
                   >
                     ${MODE_LABEL[m]}
                   </button>`)}
-                ${mode === "personnalise"
-                ? b `<span class="mode-btn sel lecture">
-                      ${MODE_LABEL.personnalise}
-                    </span>`
-                : A}
               </div>
-            </div>`
-            : A}
-        ${mode === "personnalise"
-            ? b `<div class="hint">
-              Les jours personnalisés se choisissent dans les options de
-              l'intégration.
             </div>`
             : A}
 

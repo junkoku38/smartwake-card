@@ -32,7 +32,7 @@ paramètres directement depuis la carte**, sans passer par les fiches
 | Réglage | Contrôle |
 |---|---|
 | Heure | champ `time` + boutons −5 / +5 min |
-| Jours | 4 boutons : Tous / Lundi-vendredi / Samedi-dimanche / Personnalisé |
+| Jours | 4 boutons : Tous / Semaine / Weekend / Personnalisé (pastilles cliquables) |
 | Mode d'heure | Heure unique / Par jour |
 | Mode de travail | Présentiel / Télétravail / — |
 | Mode vacances, Sauter le prochain | interrupteurs |
