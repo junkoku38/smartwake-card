@@ -705,26 +705,64 @@ class SmartwakeCard extends LitElement {
     });
   }
 
+  /* Actions rapides : ce qui sert au quotidien d'abord.
+   *
+   * L'ancienne disposition plaçait Reset au même niveau que Test, alors que
+   * Reset n'est utile qu'en cas de blocage — et déclencher par erreur le reset
+   * d'un réveil en cours n'arrive jamais par accident. Inversement, le briefing
+   * du matin et le bilan hebdomadaire — deux fonctionnalités IA — n'étaient pas
+   * accessibles depuis la carte.
+   */
   private _renderQuickActions(): TemplateResult {
     const { used, max } = this._snoozeInfo();
     return html`
       <div class="chips">
-        <div class="chip act" @click=${() => this._svc("sauter_prochain")}>
-          <ha-icon icon="mdi:skip-next"></ha-icon>Skip 1×
-        </div>
-        <div class="chip act" @click=${() => this._svc("declencher")}>
+        <div class="chip act" title="Tester le réveil immédiatement"
+             @click=${() => this._svc("declencher")}>
           <ha-icon icon="mdi:bell-ring"></ha-icon>Test
         </div>
-        <div class="chip act" @click=${() => this._svc("reset")}>
-          <ha-icon icon="mdi:restart"></ha-icon>Reset
+        <div class="chip act" title="Passer le prochain réveil une seule fois"
+             @click=${() => this._svc("sauter_prochain")}>
+          <ha-icon icon="mdi:skip-next"></ha-icon>Skip 1×
         </div>
+        ${this._e("sensor", "dernier_reveil")
+          ? html`<div class="chip act"
+               title="Énoncer le briefing du matin maintenant"
+               @click=${() => this._svcBilan("briefing")}>
+              <ha-icon icon="mdi:account-voice"></ha-icon>Briefing
+            </div>`
+          : nothing}
+        ${this._e("sensor", "snoozes_total")
+          ? html`<div class="chip act"
+               title="Générer et envoyer le bilan de sommeil de la semaine"
+               @click=${() => this._svcBilan("bilan")}>
+              <ha-icon icon="mdi:bed"></ha-icon>Bilan
+            </div>`
+          : nothing}
         ${used > 0
-          ? html`<div class="chip stat-chip">
+          ? html`<div class="chip stat-chip"
+               title="Snoozes utilisés sur ce cycle">
               <ha-icon icon="mdi:alarm-snooze"></ha-icon>${used}${max !== null ? `/${max}` : ""}
             </div>`
           : nothing}
+        <div class="chip act secondary"
+             title="Réinitialiser l'état en cas de blocage (watchdog nocturne)"
+             @click=${() => this._svc("reset")}>
+          <ha-icon icon="mdi:restart"></ha-icon>
+        </div>
       </div>
     `;
+  }
+
+  /* Services IA accessibles depuis la carte : le briefing ne s'énonce
+   * habituellement qu'au réveil, et le bilan n'est planifié que le dimanche.
+   * Les exposer ici permet de les déclencher à la demande, ce que le service
+   * smartwake.tester_ia fait côté intégration depuis la 2.23.0. */
+  private _svcBilan(tache: string): void {
+    this.hass.callService(
+      "smartwake", "tester_ia",
+      { entity_id: [this._config.entity], tache },
+    );
   }
 
   private _renderFooter(): TemplateResult | typeof nothing {
@@ -1214,6 +1252,14 @@ class SmartwakeCard extends LitElement {
     }
     .chip.act:active {
       transform: scale(0.96);
+    }
+    .chip.act.secondary {
+      opacity: 0.5;
+      margin-left: auto;
+      padding: 5px 8px;
+    }
+    .chip.act.secondary:hover {
+      opacity: 1;
     }
     .chip.stat-chip {
       cursor: default;
