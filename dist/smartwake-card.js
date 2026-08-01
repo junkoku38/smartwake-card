@@ -606,7 +606,7 @@ class SmartwakeCard extends i {
         ${chip("jour_ferie", "mdi:calendar-remove", "Férié")}
         ${chip("weekend", "mdi:calendar-weekend", "Weekend")}
         ${chip("vacances_scolaires", "mdi:school", "Vacances sco")}
-        ${chip("reveil_en_cours", "mdi:alarm-bell", "En cours")}
+
       </div>
     `;
     }
