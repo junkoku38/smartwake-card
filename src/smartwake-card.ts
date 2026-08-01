@@ -388,6 +388,23 @@ class SmartwakeCard extends LitElement {
     });
   }
 
+  /* Bascule un jour dans la liste des jours personnalisés.
+   * Permet de cocher les jours directement depuis la carte, sans passer par
+   * les options de l'intégration. */
+  private _toggleJourPerso(jour: string): void {
+    const ent = this._e("select", "jours");
+    if (!ent) return;
+    const actuels: string[] = (this._e("select", "jours")?.attributes
+      ?.jours_perso as string[]) ?? [];
+    const reste = actuels.includes(jour)
+      ? actuels.filter((j) => j !== jour)
+      : [...actuels, jour];
+    this.hass.callService("smartwake", "set_jours_perso", {
+      entity_id: [this._config.entity],
+      jours: reste,
+    });
+  }
+
   private _setNumber(suffix: string, value: number): void {
     const ent = this._e("number", suffix);
     if (!ent) return;
@@ -548,9 +565,12 @@ class SmartwakeCard extends LitElement {
           const ent = parJour
             ? this._e("time", `heure_${day}`)?.entity_id
             : sel?.entity_id;
+          const perso = mode === "personnalise";
           return html`
-            <div class="day-col" @click=${() => this._moreInfo(ent)}>
-              <div class="day ${on ? "on" : ""}">${label}</div>
+            <div class="day-col" @click=${perso
+              ? () => this._toggleJourPerso(day)
+              : () => this._moreInfo(ent)}>
+              <div class="day ${on ? "on" : ""} ${perso ? "clickable" : ""}">${label}</div>
               ${parJour
                 ? html`<span class="day-hour ${on ? "" : "off"}"
                     >${heure ?? this._heureConfig}</span
@@ -1220,6 +1240,13 @@ class SmartwakeCard extends LitElement {
       background: var(--sw-amber-bg);
       color: var(--sw-amber-text);
       font-weight: 600;
+    }
+    .day.clickable {
+      cursor: pointer;
+      transition: transform 0.1s ease, background 0.15s ease;
+    }
+    .day.clickable:active {
+      transform: scale(0.92);
     }
     .mode {
       font-size: 12px;

@@ -378,6 +378,23 @@ class SmartwakeCard extends i {
             option: mode,
         });
     }
+    /* Bascule un jour dans la liste des jours personnalisés.
+     * Permet de cocher les jours directement depuis la carte, sans passer par
+     * les options de l'intégration. */
+    _toggleJourPerso(jour) {
+        const ent = this._e("select", "jours");
+        if (!ent)
+            return;
+        const actuels = this._e("select", "jours")?.attributes
+            ?.jours_perso ?? [];
+        const reste = actuels.includes(jour)
+            ? actuels.filter((j) => j !== jour)
+            : [...actuels, jour];
+        this.hass.callService("smartwake", "set_jours_perso", {
+            entity_id: [this._config.entity],
+            jours: reste,
+        });
+    }
     _setNumber(suffix, value) {
         const ent = this._e("number", suffix);
         if (!ent)
@@ -531,9 +548,12 @@ class SmartwakeCard extends i {
             const ent = parJour
                 ? this._e("time", `heure_${day}`)?.entity_id
                 : sel?.entity_id;
+            const perso = mode === "personnalise";
             return b `
-            <div class="day-col" @click=${() => this._moreInfo(ent)}>
-              <div class="day ${on ? "on" : ""}">${label}</div>
+            <div class="day-col" @click=${perso
+                ? () => this._toggleJourPerso(day)
+                : () => this._moreInfo(ent)}>
+              <div class="day ${on ? "on" : ""} ${perso ? "clickable" : ""}">${label}</div>
               ${parJour
                 ? b `<span class="day-hour ${on ? "" : "off"}"
                     >${heure ?? this._heureConfig}</span
@@ -1170,6 +1190,13 @@ SmartwakeCard.styles = i$3 `
       background: var(--sw-amber-bg);
       color: var(--sw-amber-text);
       font-weight: 600;
+    }
+    .day.clickable {
+      cursor: pointer;
+      transition: transform 0.1s ease, background 0.15s ease;
+    }
+    .day.clickable:active {
+      transform: scale(0.92);
     }
     .mode {
       font-size: 12px;
