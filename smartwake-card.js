@@ -430,6 +430,12 @@ class SmartwakeCard extends i {
     render() {
         if (!this._config || !this.hass)
             return b ``;
+        if (this._config.theme_color)
+            this.style.setProperty("--sw-amber", this._config.theme_color);
+        if (this._config.theme_color_bg)
+            this.style.setProperty("--sw-amber-bg", this._config.theme_color_bg);
+        if (this._config.theme_color_text)
+            this.style.setProperty("--sw-amber-text", this._config.theme_color_text);
         if (!this._st(this._config.entity)) {
             return b `<ha-card class="card">
         <div class="err">

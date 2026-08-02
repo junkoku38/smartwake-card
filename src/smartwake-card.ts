@@ -15,6 +15,9 @@ interface SmartwakeCardConfig {
   show_stats?: boolean;
   show_context?: boolean;
   show_settings?: boolean;
+  theme_color?: string;
+  theme_color_bg?: string;
+  theme_color_text?: string;
 }
 
 interface HassEntity {
@@ -442,6 +445,12 @@ class SmartwakeCard extends LitElement {
 
   render(): TemplateResult {
     if (!this._config || !this.hass) return html``;
+    if (this._config.theme_color)
+      this.style.setProperty("--sw-amber", this._config.theme_color);
+    if (this._config.theme_color_bg)
+      this.style.setProperty("--sw-amber-bg", this._config.theme_color_bg);
+    if (this._config.theme_color_text)
+      this.style.setProperty("--sw-amber-text", this._config.theme_color_text);
     if (!this._st(this._config.entity)) {
       return html`<ha-card class="card">
         <div class="err">
