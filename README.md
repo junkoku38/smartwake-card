@@ -9,6 +9,8 @@ Alignée sur les entités de l'intégration SmartWAKE 2.27.4.
 
 ## Design
 
+![État normal](normal.png)
+
 ### État normal
 - **En-tête** : pastille ambre + nom + sous-titre de statut ("Sonne aujourd'hui · férié", "Préparation · 12 min avant sonnerie"...) + toggle d'activation
 - **Anneau de progression** autour de l'icône pendant la phase `prewake`, doublé d'une **barre de progression** avec pourcentage, minutes restantes et rappel des durées d'aube / pré-chauffage
@@ -26,6 +28,8 @@ Alignée sur les entités de l'intégration SmartWAKE 2.27.4.
   `theme_color_text` remplacent l'ambre par défaut
 
 ### Panneau de réglages
+
+![État pré-réveil](prewake.png)
 
 Le chevron en bas à droite déplie un panneau qui permet de **modifier les
 paramètres directement depuis la carte**, sans passer par les fiches
@@ -52,10 +56,18 @@ entité `number` et se désactivent aux bornes.
 > heures par jour non lues, notifications cassées). Les éléments correspondants
 > sont simplement masqués si l'intégration est plus ancienne.
 
-Le rafraîchissement passe automatiquement à 1 s pendant le snooze (compte à
-rebours), 5 s pendant le `prewake` (progression), et 30 s au repos.
+### État snoozé (`statut = snoozed`)
+
+![État snoozé](snoozed.png)
+
+Le sous-titre affiche un compte à rebours réel, décompté à la seconde à partir
+de `sensor.<nom>_fin_du_snooze`. Le rafraîchissement passe à 1 s pendant le
+snooze, 5 s pendant le `prewake`, et 30 s au repos.
 
 ### État sonnerie (`statut = ringing`)
+
+![État sonnerie](ringing.png)
+
 La carte se transforme : bordure ambre pulsée, deux gros boutons tactiles
 **Snooze** (`smartwake.snooze`) et **Stop** (`smartwake.stop`), le nombre de
 snoozes restants, et le rappel de l'escalade à venir. Le bouton Snooze se
