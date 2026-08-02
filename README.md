@@ -3,9 +3,9 @@
 
 Carte Lovelace custom pour l'intégration [SmartWAKE](https://github.com/junkoku38/smartwake).
 
-**v3.2** — éditeur visuel de configuration, panneau de réglages éditable et
-anneau de progression du pré-réveil. Alignée sur les entités de l'intégration
-SmartWAKE 2.5.7.
+**v3.11** — couleurs personnalisables, compte à rebours du snooze, mode de
+travail dynamique, jours personnalisés cliquables, notification persistante.
+Alignée sur les entités de l'intégration SmartWAKE 2.27.4.
 
 ## Design
 
@@ -18,10 +18,12 @@ SmartWAKE 2.5.7.
   En mode `par_jour`, l'heure de chaque jour est affichée sous sa pastille
 - **Chips d'état annulables** : « Mode vacances » et « Prochain sauté » apparaissent
   quand ils sont actifs et se désactivent d'un clic
-- **Chips contextuelles** : Férié / Weekend / Vacances sco / En cours (vertes quand actives)
-- **Actions rapides** : Skip 1× · Test · Reset · compteur de snoozes (`utilisés/max`)
+- **Chips contextuelles** : Férié / Weekend / Vacances sco (vertes quand actives)
+- **Actions rapides** : Skip 1× · Briefing · Bilan · compteur de snoozes (`utilisés/max`) · Reset (discret, à droite)
 - **Footer réglages** : volume final · luminosité max · pré-chauffage · aube · café (tap → réglage)
 - **Statistiques** : réveils / snoozes / stops cumulés + date du dernier réveil
+- **Couleurs personnalisables** : `theme_color`, `theme_color_bg`,
+  `theme_color_text` remplacent l'ambre par défaut
 
 ### Panneau de réglages
 
@@ -43,15 +45,15 @@ paramètres directement depuis la carte**, sans passer par les fiches
 Les steppers respectent le `step`, le `min` et le `max` déclarés par chaque
 entité `number` et se désactivent aux bornes.
 
-> **Requiert SmartWAKE ≥ 2.10.0.** Les entités `mode_heure`, `mode_vacances`,
-> `saut_du_prochain` et les heures par jour n'existent qu'à partir de 2.7.0, et
-> les versions antérieures à 2.10.0 comportent plusieurs bugs bloquants
-> (réglages non modifiables, réveil désarmé par toute modification, heures par
-> jour sonnant tous les jours). Les éléments correspondants sont simplement
-> masqués si l'intégration est plus ancienne.
+> **Requiert SmartWAKE ≥ 2.27.0.** Les entités `mode_heure`, `mode_vacances`,
+> `saut_du_prochain`, `mode_travail`, `fin_du_snooze` et les heures par jour
+> n'existent qu'à partir de 2.7.0, et les versions antérieures à 2.27.0
+> comportent plusieurs bugs bloquants (réveil annulé par `workday_sensor`,
+> heures par jour non lues, notifications cassées). Les éléments correspondants
+> sont simplement masqués si l'intégration est plus ancienne.
 
-Le rafraîchissement passe automatiquement de 30 s à 5 s pendant le `prewake`
-pour une progression fluide.
+Le rafraîchissement passe automatiquement à 1 s pendant le snooze (compte à
+rebours), 5 s pendant le `prewake` (progression), et 30 s au repos.
 
 ### État sonnerie (`statut = ringing`)
 La carte se transforme : bordure ambre pulsée, deux gros boutons tactiles
@@ -60,8 +62,8 @@ snoozes restants, et le rappel de l'escalade à venir. Le bouton Snooze se
 désactive automatiquement quand `max_snooze` est atteint. Pensée pour un doigt
 endormi à 6 h 45.
 
-La carte suit le thème Home Assistant (clair / sombre) ; seul l'accent ambre
-`#EF9F27` est fixe.
+La carte suit le thème Home Assistant (clair / sombre) ; l'accent ambre
+`#EF9F27` est personnalisable via `theme_color`.
 
 ## Installation
 
@@ -102,6 +104,9 @@ name: Réveil semaine
 | `show_stats`    | bool   | true      | Afficher le compteur de snoozes                    |
 | `show_context`  | bool   | true      | Afficher les chips Férié / Weekend / Vacances sco  |
 | `show_settings` | bool   | true      | Afficher le footer réglages et le panneau d'édition|
+| `theme_color`       | string | `#ef9f27` | Couleur principale (badge, anneau, boutons actifs) |
+| `theme_color_bg`     | string | `rgba(239,159,39,0.16)` | Fond des éléments actifs |
+| `theme_color_text`  | string | `#b87514` | Texte sur les éléments actifs |
 
 Toutes les autres entités sont **résolues automatiquement** — aucune
 configuration supplémentaire.
